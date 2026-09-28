@@ -153,7 +153,7 @@ is tuned for this corpus.
 One frozen dataclass, `Settings`. Frozen so it is hashable and can key `lru_cache`.
 `from_env()` walks `dataclasses.fields()` and casts by declared type — about ten
 lines of stdlib rather than one hand-written `os.environ.get` call per field, or
-a new settings dependency. Prefix `MORTGAGE_RAG_`. Boolean parsing is explicit
+a new settings dependency. Prefix `DOCUCHAT_`. Boolean parsing is explicit
 (`{"1","true","yes"}`), because `bool("false")` is `True` in Python and that failure
 mode silently disables `use_rerank`.
 

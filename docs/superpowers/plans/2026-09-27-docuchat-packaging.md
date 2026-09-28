@@ -31,7 +31,7 @@ These are the failure modes the spec implies but no obvious task test covers. Ea
 
 1. **A single chunk larger than `max_context_tokens`** — `clean_context`'s budget loop `break`s on the first chunk that doesn't fit, so an oversized first chunk yields an empty context and the LLM answers with nothing. A reasonable person expects at least one chunk through. → Task 8.
 2. **Retrieval returns zero results** (empty corpus, or a query matching nothing above BM25's score floor) — `ask()` must return the documented no-results shape, not raise on `np.mean([])`. → Task 9.
-3. **An invalid `retrieval_mode` or `llm_provider` from the environment** — a typo like `MORTGAGE_RAG_RETRIEVAL_MODE=vektor` must fail loudly at config construction, not silently fall through to one branch and quietly corrupt an ablation arm. → Task 1.
+3. **An invalid `retrieval_mode` or `llm_provider` from the environment** — a typo like `DOCUCHAT_RETRIEVAL_MODE=vektor` must fail loudly at config construction, not silently fall through to one branch and quietly corrupt an ablation arm. → Task 1.
 4. **Empty or whitespace-only page text reaching the chunker** — `recursive_chunk` on `""` must return `[]`, not a one-element list of nothing or an index error on `breaks[0]`. → Task 3.
 5. **Missing `ANTHROPIC_API_KEY`** — must fail with a message naming the missing variable at `get_llm` time, not with a cryptic auth error surfacing mid-query after a user has already uploaded documents. → Task 2.
 
@@ -71,8 +71,8 @@ def test_defaults_match_notebook_constants():
     assert cfg.max_new_tokens == 1024
 
 def test_from_env_casts_by_field_type(monkeypatch):
-    monkeypatch.setenv("MORTGAGE_RAG_TOP_K", "25")
-    monkeypatch.setenv("MORTGAGE_RAG_MERGE_THRESHOLD", "0.9")
+    monkeypatch.setenv("DOCUCHAT_TOP_K", "25")
+    monkeypatch.setenv("DOCUCHAT_MERGE_THRESHOLD", "0.9")
     cfg = Settings.from_env()
     assert cfg.top_k == 25 and isinstance(cfg.top_k, int)
     assert cfg.merge_threshold == 0.9
@@ -82,11 +82,11 @@ def test_from_env_casts_by_field_type(monkeypatch):
     ("true", True), ("True", True), ("1", True), ("yes", True),
 ])
 def test_from_env_parses_bools_explicitly(monkeypatch, raw, expected):
-    monkeypatch.setenv("MORTGAGE_RAG_USE_RERANK", raw)
+    monkeypatch.setenv("DOCUCHAT_USE_RERANK", raw)
     assert Settings.from_env().use_rerank is expected
 
 def test_from_env_overrides_take_precedence(monkeypatch):
-    monkeypatch.setenv("MORTGAGE_RAG_TOP_K", "25")
+    monkeypatch.setenv("DOCUCHAT_TOP_K", "25")
     assert Settings.from_env(top_k=3).top_k == 3
 
 def test_settings_is_hashable_for_lru_cache():
@@ -173,7 +173,7 @@ Both preambles must retain the exact strings `ONLY from the provided context` an
 `@dataclass(frozen=True)` with the exact fields, types, and defaults from the spec's config table. Two methods:
 
 - `__post_init__(self) -> None` — validates `retrieval_mode in {"vector","bm25","hybrid"}`, `llm_provider in {"anthropic","llamacpp"}`, and `domain_profile in PROFILES`, raising `ValueError` naming the offending field.
-- `from_env(cls, **overrides) -> "Settings"` — walk `dataclasses.fields(cls)`, read `MORTGAGE_RAG_<FIELD_NAME_UPPER>`, cast by `field.type`, and let `overrides` win over the environment. Booleans parse against the literal sets in the test; do not use `bool(str)`. `Optional[float]` fields (`min_rerank_score`) treat an empty string as `None`.
+- `from_env(cls, **overrides) -> "Settings"` — walk `dataclasses.fields(cls)`, read `DOCUCHAT_<FIELD_NAME_UPPER>`, cast by `field.type`, and let `overrides` win over the environment. Booleans parse against the literal sets in the test; do not use `bool(str)`. `Optional[float]` fields (`min_rerank_score`) treat an empty string as `None`.
 
 - [ ] **Step 6: Run tests to verify they pass**
 
