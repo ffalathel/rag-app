@@ -328,9 +328,17 @@ One `@pytest.mark.integration` test — ingest the fixture PDF, run `ask()`, ass
 grounded answer with a page citation. Requires Docling models and an API key, so it
 is opt-in (`pytest -m integration`) and excluded from CI.
 
-**Fixture:** one CFPB sample Closing Disclosure. A US government work, therefore
-public domain — no licensing question — small, and table-heavy, which exercises the
-Docling path. It also seeds sub-project 2's corpus.
+**Fixture:** CFPB form H-25(B), "Closing Disclosure – Fixed Rate Loan Sample"
+(`files.consumerfinance.gov/f/201403_cfpb_closing-disclosure_cover-H25B.pdf`,
+94KB, 6 pages). A US government work, therefore public domain — no licensing
+question. It is a *completed* sample, so it carries real figures the smoke test
+asserts on ($162,000 loan amount, 3.875% rate, $3,240 prepayment penalty); the
+blank H-25 model forms would make the test assert nothing. It also seeds
+sub-project 2's corpus.
+
+It has a digital text layer, so it exercises Docling's layout and table-structure
+handling but not its OCR path. OCR stays uncovered until sub-project 2 introduces
+scanned documents — a known gap, recorded here rather than papered over.
 
 ### CI
 

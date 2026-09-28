@@ -419,7 +419,30 @@ Each dict has exactly these keys: `filename: str`, `page_number: int` (1-indexed
 
 - [ ] **Step 1: Download the fixture PDF**
 
-Download the CFPB sample Closing Disclosure (a US government work, public domain) to `tests/fixtures/cfpb_closing_disclosure.pdf`. Source: the CFPB "Closing Disclosure" sample form at consumerfinance.gov. Verify it is under 1 MB and contains tables; if the specific URL 404s, any CFPB sample Closing Disclosure PDF is acceptable — note in the commit message which one was used.
+Fetch CFPB form **H-25(B), "Mortgage Loan Transaction Closing Disclosure – Fixed Rate Loan Sample"** — a completed (not blank) sample. A US government work, therefore public domain.
+
+```bash
+mkdir -p tests/fixtures
+curl -sSL -o tests/fixtures/cfpb_closing_disclosure.pdf \
+  https://files.consumerfinance.gov/f/201403_cfpb_closing-disclosure_cover-H25B.pdf
+shasum -a 256 tests/fixtures/cfpb_closing_disclosure.pdf
+```
+
+Expected: `606a93c8baaca815439822df5cf8c78cbb2dcf6cc4af5aa291a459c7917e4173`, 94,194 bytes, 6 pages.
+
+Verified facts in this document, used as assertions in Task 10:
+
+| Field | Value |
+|---|---|
+| Loan Amount | `$162,000` |
+| Interest Rate | `3.875%` |
+| Closing Costs | `$9,712.10` |
+| Cash to Close | `$14,147.26` |
+| Prepayment Penalty | `YES` — as high as `$3,240` in the first 2 years |
+
+If the checksum differs, CFPB has revised the form: keep the download, re-derive the table above from the new file, and update Task 10's assertions to match. Do not substitute a different form — H-25(A), (C), (D), (H) and the PACE form are **blank** models whose figures are zeros, and H-25(F1) is a two-page excerpt. Those make the smoke test assert nothing.
+
+**Note on coverage:** this PDF has a digital text layer, so it exercises Docling's layout and table-structure handling but **not** its OCR path. OCR goes uncovered until sub-project 2 adds scanned documents. That is a known gap, not an oversight.
 
 - [ ] **Step 2: Write the failing tests**
 
@@ -870,22 +893,40 @@ git commit -m "feat: add ask() entry point with call-budget tests"
 - [ ] **Step 1: Write the integration smoke test**
 
 ```python
-@pytest.mark.integration
-def test_end_to_end_answers_with_a_page_citation():
+@pytest.fixture(scope="module")
+def real_store():
     cfg = Settings()
     pages = load_pdf("tests/fixtures/cfpb_closing_disclosure.pdf", cfg)
     pages = classify_pages(pages, get_llm(cfg), cfg)
-    store = build_store(pages, cfg)
-    result = ask("What is the loan amount?", store, cfg)
+    return build_store(pages, cfg)
+
+@pytest.mark.integration
+@pytest.mark.parametrize("question,expected", [
+    ("What is the loan amount?", "162,000"),
+    ("What is the interest rate?", "3.875"),
+    ("Is there a prepayment penalty?", "3,240"),
+])
+def test_end_to_end_answers_contain_the_correct_figure(real_store, question, expected):
+    result = ask(question, real_store, Settings())
+    assert expected in result["answer"]
     assert result["num_chunks_used"] > 0
     assert result["sources"][0]["page_number"] >= 1
-    assert result["answer"].strip()
+
+@pytest.mark.integration
+def test_refuses_when_the_answer_is_absent(real_store):
+    result = ask("What is the borrower's credit score?", real_store, Settings())
+    assert "cannot find" in result["answer"].lower()
 ```
+
+The refusal test is the one that matters most: it is the only check in this
+sub-project that the grounding instruction in `build_prompt` actually holds, and
+a pipeline that confidently invents a credit score is worse than one that
+retrieves badly.
 
 - [ ] **Step 2: Run the smoke test**
 
 Run: `ANTHROPIC_API_KEY=<key> pytest tests/test_smoke.py -m integration -v`
-Expected: PASS. Downloads Docling and embedding models on first run; several minutes is normal.
+Expected: PASS (4 tests). Downloads Docling and embedding models on first run; several minutes is normal.
 
 - [ ] **Step 3: Write `.github/workflows/test.yml`**
 
