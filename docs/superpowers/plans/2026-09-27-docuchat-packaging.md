@@ -6,7 +6,7 @@
 
 **Architecture:** One package, `src/docuchat/`, of flat single-responsibility modules. A frozen `Settings` dataclass carries every tuning constant, the four ablation switches, and the name of a `DomainProfile` supplying the domain-specific taxonomy, section patterns, and answer prompt (`mortgage` by default, `generic` alongside it). Models load lazily through `lru_cache`d getters whose heavy imports live inside the function bodies. A `Store` object replaces five mutable globals. `ask(query, store, cfg)` is the only entry point.
 
-**Tech Stack:** Python 3.11+, LlamaIndex (core, `llama-index-llms-anthropic`, `llama-index-embeddings-huggingface`), Docling, sentence-transformers, rank-bm25, nltk, scikit-learn, pytest.
+**Tech Stack:** Python 3.11+, LlamaIndex (core, `llama-index-llms-anthropic`, `llama-index-embeddings-huggingface`), Docling, sentence-transformers, rank-bm25, pytest.
 
 **Spec:** `docs/superpowers/specs/2026-09-27-docuchat-packaging-design.md`
 
@@ -145,7 +145,7 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'docuchat'`
 
 - [ ] **Step 3: Write `pyproject.toml` and `.gitignore`**
 
-`pyproject.toml`: src layout, `requires-python = ">=3.11"`, pinned base dependencies (`llama-index-core`, `llama-index-llms-anthropic`, `llama-index-embeddings-huggingface`, `docling`, `rank-bm25`, `nltk`, `scikit-learn`, `sentence-transformers`), extras `local-llm = ["llama-cpp-python"]` and `dev = ["pytest"]`, and `[tool.pytest.ini_options]` registering the `integration` marker with `testpaths = ["tests"]`.
+`pyproject.toml`: src layout, `requires-python = ">=3.11"`, pinned base dependencies (`llama-index-core`, `llama-index-llms-anthropic`, `llama-index-embeddings-huggingface`, `docling`, `rank-bm25`, `sentence-transformers`), extras `local-llm = ["llama-cpp-python"]` and `dev = ["pytest"]`, and `[tool.pytest.ini_options]` registering the `integration` marker with `testpaths = ["tests"]`.
 
 `.gitignore`: `*.gguf`, `indexes/`, `data/documents/`, `.env`, plus standard Python entries.
 
@@ -611,6 +611,12 @@ def test_bm25_tokenizer_keeps_currency_and_percent():
 def test_bm25_tokenizer_drops_stopwords():
     assert "the" not in tokenize_for_bm25("the interest rate")
 
+def test_bm25_tokenizer_needs_no_downloaded_corpus():
+    # guards the CI no-network constraint: no nltk, no punkt, no stopwords corpus
+    import docuchat.index as m
+    assert "nltk" not in sys.modules
+    assert not hasattr(m, "nltk")
+
 def test_bm25_search_ranks_exact_term_match_first(text_nodes):
     idx = BM25Index(text_nodes)
     top = idx.search("prepayment penalty", top_k=3)
@@ -630,6 +636,14 @@ Expected: FAIL — module does not exist.
 - [ ] **Step 3: Implement `src/docuchat/index.py`**
 
 `build_nodes` loops pages → `chunk_page` → one `TextNode` per chunk with the metadata above, `table_present` from `detect_table_content`, and a corpus-wide incrementing `chunk_id`.
+
+`tokenize_for_bm25` uses a **regex tokenizer plus a module-level frozenset of
+English stopwords** — not `nltk`. Controller ruling C1: `nltk.word_tokenize` and
+`nltk.corpus.stopwords` both require downloaded corpora, which would make the
+default test run hit the network, violating a Global Constraint. Lowercase, then
+`re.findall(r"[a-z0-9$%.,]+", ...)`, drop pure-punctuation tokens and stopwords,
+and keep tokens containing `$` or `%` (the notebook's intent: currency and rate
+figures are high-signal lexical matches in these documents).
 
 `BM25Index` wraps `BM25Okapi` over tokenized node text; `search` returns `(node, score)` sorted descending, dropping zero scores, and returns `[]` for an empty corpus (guard before constructing `BM25Okapi`, which rejects an empty corpus).
 
