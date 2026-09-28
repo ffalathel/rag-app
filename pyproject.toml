@@ -8,17 +8,17 @@ version = "0.1.0"
 description = "Document chat: upload PDFs, ask questions."
 requires-python = ">=3.11"
 dependencies = [
-    "llama-index-core==0.11.23",
-    "llama-index-llms-anthropic==0.3.3",
-    "llama-index-embeddings-huggingface==0.3.1",
-    "docling==2.7.0",
+    "llama-index-core==0.14.25",
+    "llama-index-llms-anthropic==0.12.1",
+    "llama-index-embeddings-huggingface==0.8.0",
+    "docling==2.130.0",
     "rank-bm25==0.2.2",
-    "sentence-transformers==3.2.1",
+    "sentence-transformers==6.1.0",
 ]
 
 [project.optional-dependencies]
-local-llm = ["llama-cpp-python==0.3.2"]
-dev = ["pytest==8.3.3"]
+local-llm = ["llama-cpp-python==0.3.35"]
+dev = ["pytest==9.1.1"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
