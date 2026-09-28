@@ -1,25 +1,26 @@
-# Mortgage RAG Packaging Implementation Plan
+# Docuchat Packaging Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Turn `complete_mortgage_rag_pipeline.py` (a Colab notebook export driven by module-level globals) into an installable Python package with a config seam, a swappable LLM backend, Docling ingestion, and a test suite that runs with no GPU, no API key, and no model downloads.
+**Goal:** Turn `complete_docuchat_pipeline.py` (a Colab notebook export driven by module-level globals) into an installable Python package with a config seam, a swappable LLM backend, Docling ingestion, and a test suite that runs with no GPU, no API key, and no model downloads.
 
-**Architecture:** One package, `src/mortgage_rag/`, of flat single-responsibility modules. A frozen `Settings` dataclass carries every tuning constant and the four ablation switches. Models load lazily through `lru_cache`d getters whose heavy imports live inside the function bodies. A `Store` object replaces five mutable globals. `ask(query, store, cfg)` is the only entry point.
+**Architecture:** One package, `src/docuchat/`, of flat single-responsibility modules. A frozen `Settings` dataclass carries every tuning constant, the four ablation switches, and the name of a `DomainProfile` supplying the domain-specific taxonomy, section patterns, and answer prompt (`mortgage` by default, `generic` alongside it). Models load lazily through `lru_cache`d getters whose heavy imports live inside the function bodies. A `Store` object replaces five mutable globals. `ask(query, store, cfg)` is the only entry point.
 
 **Tech Stack:** Python 3.11+, LlamaIndex (core, `llama-index-llms-anthropic`, `llama-index-embeddings-huggingface`), Docling, sentence-transformers, rank-bm25, nltk, scikit-learn, pytest.
 
-**Spec:** `docs/superpowers/specs/2026-09-27-mortgage-rag-packaging-design.md`
+**Spec:** `docs/superpowers/specs/2026-09-27-docuchat-packaging-design.md`
 
-**Source material:** `complete_mortgage_rag_pipeline.py` at the repo root is the notebook export being ported. Tasks reference it by function name; read that function before porting it.
+**Source material:** `complete_docuchat_pipeline.py` at the repo root is the notebook export being ported. Tasks reference it by function name; read that function before porting it.
 
 ## Global Constraints
 
 - Python 3.11+. All dependency versions pinned in `pyproject.toml`.
-- Package lives at `src/mortgage_rag/`; `pyproject.toml` uses a src layout.
+- Package lives at `src/docuchat/`; `pyproject.toml` uses a src layout.
 - **No module-scope import of `torch`, `docling`, `sentence_transformers`, or `llama_index.embeddings.huggingface` anywhere in the package.** These import only inside function bodies. Enforced by `tests/test_import_purity.py`.
 - **No test in the default run may download a model, load `torch`, or make a network call.** Tests needing those are marked `@pytest.mark.integration` and excluded from CI.
 - No `llama_index.core.Settings` global mutation anywhere. `embed_model` is passed explicitly.
 - Every tuning constant comes from `Settings`. No magic numbers in function bodies.
+- Every domain-specific value (document-type taxonomy, section-heading regexes, answer prompt preamble) comes from `cfg.profile`. No module-level mortgage constants anywhere outside `profiles.py`.
 - Functions needing an encoder, cross-encoder, or LLM take it as a parameter. No module-level model objects.
 - Config defaults reproduce the notebook's constants except for the six deliberate changes listed in the spec's "Behavior changes" section.
 - Register the `integration` marker in `pyproject.toml` under `[tool.pytest.ini_options]` so unmarked-marker warnings don't appear.
@@ -36,17 +37,20 @@ These are the failure modes the spec implies but no obvious task test covers. Ea
 
 ---
 
-### Task 1: Project scaffolding and configuration
+### Task 1: Project scaffolding, configuration, and domain profiles
 
 **Files:**
-- Create: `pyproject.toml`, `.gitignore`, `src/mortgage_rag/__init__.py`, `src/mortgage_rag/config.py`
-- Test: `tests/test_config.py`
+- Create: `pyproject.toml`, `.gitignore`, `src/docuchat/__init__.py`, `src/docuchat/profiles.py`, `src/docuchat/config.py`
+- Test: `tests/test_config.py`, `tests/test_profiles.py`
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: `Settings` — a frozen, hashable dataclass with the fields in the spec's config table, plus `Settings.from_env(**overrides) -> Settings`. Every later task takes a `Settings` named `cfg`.
+- Produces:
+  - `DomainProfile` — frozen dataclass: `name: str`, `doc_type_keywords: tuple[tuple[str, str], ...]`, `llm_categories: tuple[str, ...]`, `section_patterns: tuple[str, ...]`, `answer_system_prompt: str`
+  - `PROFILES: dict[str, DomainProfile]` with keys `"mortgage"` and `"generic"`
+  - `Settings` — a frozen, hashable dataclass with the fields in the spec's config table, plus `Settings.from_env(**overrides) -> Settings` and a `profile` property resolving `domain_profile` through `PROFILES`. Every later task takes a `Settings` named `cfg` and reads domain specifics via `cfg.profile`.
 
-`__init__.py` stays empty — no re-exports. Anything it imports would be imported by `import mortgage_rag`, which is exactly what Task 2's purity test forbids.
+`__init__.py` stays empty — no re-exports. Anything it imports would be imported by `import docuchat`, which is exactly what Task 2's purity test forbids.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -96,12 +100,48 @@ def test_invalid_retrieval_mode_raises():
 def test_invalid_llm_provider_raises():
     with pytest.raises(ValueError, match="llm_provider"):
         Settings(llm_provider="openai")
+
+def test_invalid_domain_profile_raises():
+    with pytest.raises(ValueError, match="domain_profile"):
+        Settings(domain_profile="banking")
+
+def test_profile_property_resolves():
+    assert Settings().profile.name == "mortgage"
+    assert Settings(domain_profile="generic").profile.name == "generic"
+```
+
+`tests/test_profiles.py`:
+
+```python
+def test_both_profiles_are_registered():
+    assert set(PROFILES) == {"mortgage", "generic"}
+
+def test_profiles_are_hashable_so_settings_stays_lru_cacheable():
+    assert hash(PROFILES["mortgage"])
+
+def test_mortgage_profile_keeps_the_notebook_taxonomy():
+    labels = [label for _, label in PROFILES["mortgage"].doc_type_keywords]
+    assert "Closing Disclosure" in labels and "Promissory Note" in labels
+    keys = [k for k, _ in PROFILES["mortgage"].doc_type_keywords]
+    assert keys.index("closing disclosure") < keys.index("disclosure")
+
+def test_generic_profile_has_no_keyword_taxonomy():
+    assert PROFILES["generic"].doc_type_keywords == ()
+
+def test_generic_prompt_is_domain_neutral():
+    assert "mortgage" not in PROFILES["generic"].answer_system_prompt.lower()
+
+@pytest.mark.parametrize("name", ["mortgage", "generic"])
+def test_every_profile_keeps_the_grounding_contract(name):
+    prompt = PROFILES[name].answer_system_prompt
+    assert "ONLY from the provided context" in prompt
+    assert "cannot find this information" in prompt
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `pytest tests/test_config.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'mortgage_rag'`
+Run: `pytest tests/test_config.py tests/test_profiles.py -v`
+Expected: FAIL — `ModuleNotFoundError: No module named 'docuchat'`
 
 - [ ] **Step 3: Write `pyproject.toml` and `.gitignore`**
 
@@ -109,23 +149,42 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'mortgage_rag'`
 
 `.gitignore`: `*.gguf`, `indexes/`, `data/documents/`, `.env`, plus standard Python entries.
 
-- [ ] **Step 4: Implement `Settings` in `src/mortgage_rag/config.py`**
+- [ ] **Step 4: Implement `DomainProfile` and `PROFILES` in `src/docuchat/profiles.py`**
+
+`@dataclass(frozen=True)`, all collection fields as tuples so instances hash.
+
+The **mortgage** profile carries the notebook's values verbatim: the 19
+`(keyword, label)` pairs from `classify_doc_type_heuristic` **in their original
+order**, the categories from `classify_page_with_llm`'s prompt, the five
+`SECTION_PATTERNS` regexes, and the `ask_v3` prompt preamble.
+
+The **generic** profile has `doc_type_keywords = ()` (everything falls through to
+LLM classification), neutral `llm_categories` (`Contract`, `Invoice`, `Report`,
+`Statement`, `Form`, `Correspondence`, `Academic Paper`, `Other`), only the
+structural heading patterns from the mortgage set (numbered headings and all-caps
+lines — drop the legal `(a)` / `(iv)` sub-clause patterns), and a domain-neutral
+preamble.
+
+Both preambles must retain the exact strings `ONLY from the provided context` and
+`cannot find this information`; Task 9 asserts on them.
+
+- [ ] **Step 5: Implement `Settings` in `src/docuchat/config.py`**
 
 `@dataclass(frozen=True)` with the exact fields, types, and defaults from the spec's config table. Two methods:
 
-- `__post_init__(self) -> None` — validates `retrieval_mode in {"vector","bm25","hybrid"}` and `llm_provider in {"anthropic","llamacpp"}`, raising `ValueError` naming the offending field.
+- `__post_init__(self) -> None` — validates `retrieval_mode in {"vector","bm25","hybrid"}`, `llm_provider in {"anthropic","llamacpp"}`, and `domain_profile in PROFILES`, raising `ValueError` naming the offending field.
 - `from_env(cls, **overrides) -> "Settings"` — walk `dataclasses.fields(cls)`, read `MORTGAGE_RAG_<FIELD_NAME_UPPER>`, cast by `field.type`, and let `overrides` win over the environment. Booleans parse against the literal sets in the test; do not use `bool(str)`. `Optional[float]` fields (`min_rerank_score`) treat an empty string as `None`.
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [ ] **Step 6: Run tests to verify they pass**
 
-Run: `pytest tests/test_config.py -v`
+Run: `pytest tests/test_config.py tests/test_profiles.py -v`
 Expected: PASS (all)
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add pyproject.toml .gitignore src/mortgage_rag/__init__.py src/mortgage_rag/config.py tests/test_config.py
-git commit -m "feat: add package scaffolding and Settings config"
+git add pyproject.toml .gitignore src/docuchat/__init__.py src/docuchat/profiles.py src/docuchat/config.py tests/test_config.py tests/test_profiles.py
+git commit -m "feat: add package scaffolding, Settings config, and domain profiles"
 ```
 
 ---
@@ -133,7 +192,7 @@ git commit -m "feat: add package scaffolding and Settings config"
 ### Task 2: Lazy model getters and import purity
 
 **Files:**
-- Create: `src/mortgage_rag/models.py`
+- Create: `src/docuchat/models.py`
 - Test: `tests/test_models.py`, `tests/test_import_purity.py`
 
 **Interfaces:**
@@ -154,8 +213,8 @@ All three are `@lru_cache(maxsize=1)`. Later tasks call these at the edges (Task
 HEAVY = {"torch", "docling", "sentence_transformers"}
 
 @pytest.mark.parametrize("module", [
-    "mortgage_rag", "mortgage_rag.config", "mortgage_rag.models",
-    "mortgage_rag.pipeline", "mortgage_rag.ingest",
+    "docuchat", "docuchat.config", "docuchat.models",
+    "docuchat.pipeline", "docuchat.ingest",
 ])
 def test_import_does_not_load_heavy_deps(module):
     code = (
@@ -201,9 +260,9 @@ it the two getters silently drift into two copies of the same 130MB model.
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/test_models.py tests/test_import_purity.py -v`
-Expected: FAIL — `mortgage_rag.models` does not exist.
+Expected: FAIL — `docuchat.models` does not exist.
 
-- [ ] **Step 3: Implement the three getters in `src/mortgage_rag/models.py`**
+- [ ] **Step 3: Implement the three getters in `src/docuchat/models.py`**
 
 Each is `@lru_cache(maxsize=1)` over `cfg`. Every heavy import (`from llama_index.llms.anthropic import Anthropic`, `from llama_index.llms.llama_cpp import LlamaCPP`, `from sentence_transformers import SentenceTransformer, CrossEncoder`) goes **inside** the function body.
 
@@ -226,7 +285,7 @@ Expected: PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/mortgage_rag/models.py tests/test_models.py tests/test_import_purity.py
+git add src/docuchat/models.py tests/test_models.py tests/test_import_purity.py
 git commit -m "feat: add lazy cached model getters with import purity test"
 ```
 
@@ -235,15 +294,15 @@ git commit -m "feat: add lazy cached model getters with import purity test"
 ### Task 3: Chunking
 
 **Files:**
-- Create: `src/mortgage_rag/chunking.py`
+- Create: `src/docuchat/chunking.py`
 - Test: `tests/test_chunking.py`, `tests/test_table_detection.py`
 
-**Source:** port `SECTION_PATTERNS`, `find_section_breaks`, `recursive_chunk`, `semantic_merge`, `smart_chunk_page`, `detect_table_content` from the notebook.
+**Source:** port `find_section_breaks`, `recursive_chunk`, `semantic_merge`, `smart_chunk_page`, `detect_table_content` from the notebook. `SECTION_PATTERNS` does **not** become a module constant — it moved to `profiles.py` in Task 1 and arrives via `cfg.profile.section_patterns`.
 
 **Interfaces:**
 - Consumes: `Settings`.
 - Produces:
-  - `find_section_breaks(text: str) -> list[tuple[int, str]]`
+  - `find_section_breaks(text: str, patterns: tuple[str, ...]) -> list[tuple[int, str]]`
   - `recursive_chunk(text: str, cfg: Settings) -> list[tuple[str, str]]` — `(chunk_text, section_title)`
   - `semantic_merge(chunks: list[tuple[str, str]], encoder, cfg: Settings) -> list[tuple[str, str]]`
   - `chunk_page(text: str, encoder, cfg: Settings) -> list[tuple[str, str]]`
@@ -273,6 +332,13 @@ def test_drops_chunks_below_min_chunk_words():
 def test_unheadered_text_becomes_one_full_page_chunk():
     chunks = recursive_chunk("word " * 50, Settings())
     assert len(chunks) == 1 and chunks[0][1] == "Full Page"
+
+def test_profile_selects_the_section_patterns():
+    # "(a)" is a mortgage sub-clause pattern; the generic profile omits it
+    text = "(a) Borrower shall pay.\n\n(b) Lender may accelerate.\n\n" + "word " * 40
+    mortgage = recursive_chunk(text, Settings(domain_profile="mortgage"))
+    generic = recursive_chunk(text, Settings(domain_profile="generic"))
+    assert len(mortgage) != len(generic)
 
 # Review Focus 4
 @pytest.mark.parametrize("text", ["", "   ", "\n\n\t\n"])
@@ -309,9 +375,9 @@ Define `stub_encoder` in `tests/conftest.py` as a fixture returning an object wh
 Run: `pytest tests/test_chunking.py tests/test_table_detection.py -v`
 Expected: FAIL — module does not exist.
 
-- [ ] **Step 3: Implement `src/mortgage_rag/chunking.py`**
+- [ ] **Step 3: Implement `src/docuchat/chunking.py`**
 
-Port the notebook functions with three changes: constants read from `cfg` (`chunk_max_tokens`, `chunk_min_tokens`, `min_chunk_words`, `merge_threshold`, `merge_max_tokens`); `semantic_merge` takes `encoder` as a parameter instead of using a global; `recursive_chunk` guards empty/whitespace input before touching `breaks[0]`. Keep the notebook's `words * 1.3` token estimate and the existing `SECTION_PATTERNS` regexes verbatim. `chunk_page` is `recursive_chunk` then `semantic_merge`.
+Port the notebook functions with four changes: constants read from `cfg` (`chunk_max_tokens`, `chunk_min_tokens`, `min_chunk_words`, `merge_threshold`, `merge_max_tokens`); section regexes read from `cfg.profile.section_patterns` and pass into `find_section_breaks`; `semantic_merge` takes `encoder` as a parameter instead of using a global; `recursive_chunk` guards empty/whitespace input before touching `breaks[0]`. Keep the notebook's `words * 1.3` token estimate. `chunk_page` is `recursive_chunk` then `semantic_merge`.
 
 Use `numpy` for the cosine similarity between normalised vectors (a dot product), not `sklearn.metrics.pairwise.cosine_similarity` on reshaped single rows.
 
@@ -323,7 +389,7 @@ Expected: PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/mortgage_rag/chunking.py tests/test_chunking.py tests/test_table_detection.py tests/conftest.py
+git add src/docuchat/chunking.py tests/test_chunking.py tests/test_table_detection.py tests/conftest.py
 git commit -m "feat: add chunking with config-driven constants and injected encoder"
 ```
 
@@ -332,7 +398,7 @@ git commit -m "feat: add chunking with config-driven constants and injected enco
 ### Task 4: Page classification
 
 **Files:**
-- Create: `src/mortgage_rag/classify.py`
+- Create: `src/docuchat/classify.py`
 - Test: `tests/test_classify.py`
 
 **Source:** port `classify_doc_type_heuristic`, `classify_page_with_llm`, `classify_all_pages`.
@@ -340,7 +406,7 @@ git commit -m "feat: add chunking with config-driven constants and injected enco
 **Interfaces:**
 - Consumes: `Settings`.
 - Produces:
-  - `classify_doc_type_heuristic(text: str) -> str`
+  - `classify_doc_type_heuristic(text: str, cfg: Settings) -> str`
   - `classify_page_with_llm(text: str, llm, cfg: Settings) -> str`
   - `classify_pages(pages: list[dict], llm, cfg: Settings) -> list[dict]` — sets `doc_type` on each page dict in place and returns the list.
 
@@ -355,7 +421,19 @@ git commit -m "feat: add chunking with config-driven constants and injected enco
     ("Nothing recognisable here at all", "Unknown"),
 ])
 def test_heuristic_classification(text, expected):
-    assert classify_doc_type_heuristic(text) == expected
+    assert classify_doc_type_heuristic(text, Settings()) == expected
+
+# Acceptance criterion 4: the profile switch is real, not decorative
+def test_generic_profile_has_no_heuristic_hits(fake_llm):
+    text = "This CLOSING DISCLOSURE describes..."
+    assert classify_doc_type_heuristic(text, Settings()) == "Closing Disclosure"
+    assert classify_doc_type_heuristic(text, Settings(domain_profile="generic")) == "Unknown"
+
+def test_generic_profile_routes_everything_to_the_llm(fake_llm):
+    pages = [{"text": "This CLOSING DISCLOSURE describes..." + "x" * 80,
+              "page_number": 1, "filename": "a.pdf"}]
+    classify_pages(pages, fake_llm, Settings(domain_profile="generic"))
+    assert fake_llm.calls == 1
 
 def test_llm_used_only_when_heuristic_returns_unknown(fake_llm):
     pages = [
@@ -383,9 +461,9 @@ Add `fake_llm` to `tests/conftest.py`: an object with a `calls` counter and a `.
 Run: `pytest tests/test_classify.py -v`
 Expected: FAIL — module does not exist.
 
-- [ ] **Step 3: Implement `src/mortgage_rag/classify.py`**
+- [ ] **Step 3: Implement `src/docuchat/classify.py`**
 
-Port verbatim, with `llm` and `cfg` as parameters. Keep the notebook's keyword list and its ordering — ordering is load-bearing, since `"disclosure"` must not shadow `"closing disclosure"`. Read the snippet length from `cfg.classify_snippet_chars`. Replace the notebook's bare `except:` clauses with `except Exception`. Drop the per-page `print` calls.
+Port with `llm` and `cfg` as parameters. The keyword list comes from `cfg.profile.doc_type_keywords` and is iterated **in order** — ordering is load-bearing, since `"disclosure"` must not shadow `"closing disclosure"`. An empty tuple (the generic profile) means every page returns `"Unknown"` and falls through to the LLM. The LLM prompt's category list comes from `cfg.profile.llm_categories`. Read the snippet length from `cfg.classify_snippet_chars`. Replace the notebook's bare `except:` clauses with `except Exception`. Drop the per-page `print` calls.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -395,7 +473,7 @@ Expected: PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/mortgage_rag/classify.py tests/test_classify.py tests/conftest.py
+git add src/docuchat/classify.py tests/test_classify.py tests/conftest.py
 git commit -m "feat: add page classification with injected LLM"
 ```
 
@@ -404,7 +482,7 @@ git commit -m "feat: add page classification with injected LLM"
 ### Task 5: Docling ingestion
 
 **Files:**
-- Create: `src/mortgage_rag/ingest.py`, `tests/fixtures/` (with the sample PDF)
+- Create: `src/docuchat/ingest.py`, `tests/fixtures/` (with the sample PDF)
 - Test: `tests/test_ingest.py`
 
 **Replaces:** the notebook's `preprocess_image`, `ocr_with_paddle`, `ocr_with_tesseract`, `ingest_pdf`, `ingest_all_pdfs`. None of those port.
@@ -470,7 +548,7 @@ def test_load_pdf_extracts_text_and_pages():
 Run: `pytest tests/test_ingest.py -v -m "not integration"`
 Expected: FAIL — module does not exist.
 
-- [ ] **Step 4: Implement `src/mortgage_rag/ingest.py`**
+- [ ] **Step 4: Implement `src/docuchat/ingest.py`**
 
 `load_pdf` imports Docling **inside the function body**, builds a `DocumentConverter` configured from `cfg.do_ocr` and `cfg.do_table_structure`, converts the file, and emits one dict per page via `_pages_from_texts`. Export per-page text as Markdown so table structure survives. `load_directory` globs `*.pdf` case-insensitively, sorted, and concatenates.
 
@@ -486,7 +564,7 @@ Expected: PASS (both). The integration run downloads Docling models on first exe
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/mortgage_rag/ingest.py tests/test_ingest.py tests/fixtures/
+git add src/docuchat/ingest.py tests/test_ingest.py tests/fixtures/
 git commit -m "feat: replace OCR chain with Docling ingestion"
 ```
 
@@ -495,7 +573,7 @@ git commit -m "feat: replace OCR chain with Docling ingestion"
 ### Task 6: Nodes, BM25 index, and Store
 
 **Files:**
-- Create: `src/mortgage_rag/index.py`
+- Create: `src/docuchat/index.py`
 - Test: `tests/test_index.py`
 
 **Source:** port `create_documents_from_pages`, `build_phase2_documents`, `BM25Index`, `tokenize_for_bm25`. The notebook's `USE_LLAMAINDEX_BM25` dual path and `llamaindex_bm25` do **not** port — keep only the manual `BM25Okapi` implementation.
@@ -549,7 +627,7 @@ Add a `text_nodes` fixture to `conftest.py`: a handful of `TextNode`s with disti
 Run: `pytest tests/test_index.py -v`
 Expected: FAIL — module does not exist.
 
-- [ ] **Step 3: Implement `src/mortgage_rag/index.py`**
+- [ ] **Step 3: Implement `src/docuchat/index.py`**
 
 `build_nodes` loops pages → `chunk_page` → one `TextNode` per chunk with the metadata above, `table_present` from `detect_table_content`, and a corpus-wide incrementing `chunk_id`.
 
@@ -567,7 +645,7 @@ Expected: PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/mortgage_rag/index.py tests/test_index.py tests/conftest.py
+git add src/docuchat/index.py tests/test_index.py tests/conftest.py
 git commit -m "feat: add node building, BM25 index, and Store replacing globals"
 ```
 
@@ -576,7 +654,7 @@ git commit -m "feat: add node building, BM25 index, and Store replacing globals"
 ### Task 7: Retrieval, RRF, and query processing
 
 **Files:**
-- Create: `src/mortgage_rag/retrieval.py`
+- Create: `src/docuchat/retrieval.py`
 - Test: `tests/test_rrf.py`, `tests/test_retrieval.py`
 
 **Source:** port `vector_search`, `reciprocal_rank_fusion`, `hybrid_retrieve`, `rewrite_query`, `decompose_query`. **Fixes bug 1** from the spec.
@@ -649,7 +727,7 @@ Add `make_node(**kw)` and `fake_store` to `conftest.py`.
 Run: `pytest tests/test_rrf.py tests/test_retrieval.py -v`
 Expected: FAIL — module does not exist.
 
-- [ ] **Step 3: Implement `src/mortgage_rag/retrieval.py`**
+- [ ] **Step 3: Implement `src/docuchat/retrieval.py`**
 
 Port the notebook functions with these changes:
 
@@ -668,7 +746,7 @@ Expected: PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/mortgage_rag/retrieval.py tests/test_rrf.py tests/test_retrieval.py tests/conftest.py
+git add src/docuchat/retrieval.py tests/test_rrf.py tests/test_retrieval.py tests/conftest.py
 git commit -m "fix: key RRF on node identity instead of text prefix
 
 Two chunks sharing a 200-character prefix collapsed into one, silently
@@ -680,7 +758,7 @@ reducing recall on boilerplate-heavy mortgage instruments."
 ### Task 8: Reranking and context cleanup
 
 **Files:**
-- Create: `src/mortgage_rag/rerank.py`
+- Create: `src/docuchat/rerank.py`
 - Test: `tests/test_rerank.py`, `tests/test_context_cleanup.py`
 
 **Source:** port `rerank_results`, `clean_context`. **Fixes bug 2** from the spec.
@@ -750,7 +828,7 @@ Add `recording_cross_encoder` (records the `(query, text)` pairs it was given, r
 Run: `pytest tests/test_rerank.py tests/test_context_cleanup.py -v`
 Expected: FAIL — module does not exist.
 
-- [ ] **Step 3: Implement `src/mortgage_rag/rerank.py`**
+- [ ] **Step 3: Implement `src/docuchat/rerank.py`**
 
 `rerank` builds pairs from **full** `node.get_content()` — no character slice; the cross-encoder's own `max_length` truncates. Sort descending, truncate to `cfg.rerank_top_n`.
 
@@ -766,7 +844,7 @@ Expected: PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/mortgage_rag/rerank.py tests/test_rerank.py tests/test_context_cleanup.py tests/conftest.py
+git add src/docuchat/rerank.py tests/test_rerank.py tests/test_context_cleanup.py tests/conftest.py
 git commit -m "fix: send full chunk text to the cross-encoder
 
 The reranker received a 512-CHARACTER slice while its max_length is 512
@@ -778,7 +856,7 @@ TOKENS, discarding roughly three quarters of every chunk before scoring."
 ### Task 9: Pipeline entry point and call budgets
 
 **Files:**
-- Create: `src/mortgage_rag/pipeline.py`
+- Create: `src/docuchat/pipeline.py`
 - Modify: `tests/test_import_purity.py` (remove the `importorskip` guards from Task 2)
 - Test: `tests/test_pipeline.py`, `tests/test_call_budget.py`
 
@@ -788,7 +866,7 @@ TOKENS, discarding roughly three quarters of every chunk before scoring."
 - Consumes: everything from Tasks 1–8.
 - Produces:
   - `ask(query: str, store: Store, cfg: Settings, llm=None, encoder=None, cross_encoder=None) -> dict`
-  - `build_prompt(query: str, cleaned: list[tuple[TextNode, float]]) -> str`
+  - `build_prompt(query: str, cleaned: list[tuple[TextNode, float]], cfg: Settings) -> str`
 
 The three model parameters default to `None`, in which case `ask` resolves them from `models.py`. Tests pass fakes. Return shape:
 
@@ -844,10 +922,18 @@ def test_debug_records_rewritten_query_and_sub_queries(fake_llm, fake_store, fak
     result = ask("q", fake_store, Settings(), llm=fake_llm, **fake_models)
     assert set(result["debug"]) == {"original_query", "rewritten_query", "sub_queries"}
 
-def test_prompt_contains_grounding_and_refusal_instruction(fake_store):
-    prompt = build_prompt("q", [(make_node(text="ctx"), 1.0)])
+@pytest.mark.parametrize("profile", ["mortgage", "generic"])
+def test_prompt_contains_grounding_and_refusal_instruction(profile):
+    prompt = build_prompt("q", [(make_node(text="ctx"), 1.0)],
+                          Settings(domain_profile=profile))
     assert "ONLY from the provided context" in prompt
     assert "cannot find this information" in prompt
+
+def test_prompt_preamble_comes_from_the_profile():
+    node = [(make_node(text="ctx"), 1.0)]
+    assert "mortgage" in build_prompt("q", node, Settings()).lower()
+    assert "mortgage" not in build_prompt(
+        "q", node, Settings(domain_profile="generic")).lower()
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -855,11 +941,11 @@ def test_prompt_contains_grounding_and_refusal_instruction(fake_store):
 Run: `pytest tests/test_pipeline.py tests/test_call_budget.py -v`
 Expected: FAIL — module does not exist.
 
-- [ ] **Step 3: Implement `src/mortgage_rag/pipeline.py`**
+- [ ] **Step 3: Implement `src/docuchat/pipeline.py`**
 
 `ask` runs the documented flow: optional rewrite → optional decompose → `retrieve` per sub-query → dedup across sub-queries on `node_key` → optional `rerank` → `clean_context` → `build_prompt` → `llm.complete`. Return early with the zero-results shape when retrieval yields nothing, **before** computing `np.mean` on an empty list.
 
-`build_prompt` keeps the notebook's prompt text verbatim, including the `[Source N: filename, Page N, Type: ..., Section: ...]` header per chunk and the refusal instruction. That wording is the grounding contract sub-project 2 measures; do not reword it.
+`build_prompt` takes its preamble from `cfg.profile.answer_system_prompt` and keeps the notebook's structure verbatim around it: the `[Source N: filename, Page N, Type: ..., Section: ...]` header per chunk, the `=== CONTEXT ===` delimiters, and the trailing question. That wording is the grounding contract sub-project 2 measures; do not reword it.
 
 `confidence` is the mean of the cleaned chunks' scores, rounded to 4 places.
 
@@ -875,7 +961,7 @@ Expected: PASS (all tests, all tasks)
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/mortgage_rag/pipeline.py tests/test_pipeline.py tests/test_call_budget.py tests/test_import_purity.py
+git add src/docuchat/pipeline.py tests/test_pipeline.py tests/test_call_budget.py tests/test_import_purity.py
 git commit -m "feat: add ask() entry point with call-budget tests"
 ```
 
@@ -934,7 +1020,7 @@ Trigger on push and pull_request. One job: checkout, `actions/setup-python` at 3
 
 - [ ] **Step 4: Write `notebooks/demo.ipynb`**
 
-Roughly ten cells, importing only from `mortgage_rag`, defining no pipeline logic: build a `Settings`, `load_pdf` the fixture, `classify_pages`, `build_store`, print the page/chunk/doc-type breakdown, then `ask` three questions printing answers with citations. Suggested questions: "What is the loan amount?", "What are the closing costs?", "Is there a prepayment penalty?".
+Roughly ten cells, importing only from `docuchat`, defining no pipeline logic: build a `Settings`, `load_pdf` the fixture, `classify_pages`, `build_store`, print the page/chunk/doc-type breakdown, then `ask` three questions printing answers with citations. Suggested questions: "What is the loan amount?", "What are the closing costs?", "Is there a prepayment penalty?".
 
 - [ ] **Step 5: Verify the notebook runs top to bottom**
 
@@ -945,7 +1031,7 @@ Expected: exit 0.
 
 Run each and confirm:
 - `pip install -e .[dev] && pytest -m "not integration"` → passes with no GPU, no API key, no downloads
-- `python -c "import mortgage_rag.pipeline"` → returns without loading torch/docling/sentence_transformers
+- `python -c "import docuchat.pipeline"` → returns without loading torch/docling/sentence_transformers
 - `git status` → clean
 
 - [ ] **Step 7: Commit**
@@ -959,4 +1045,4 @@ git commit -m "feat: add smoke test, demo notebook, and test CI"
 
 ## Not in this plan
 
-FastAPI service; index persistence; the Gradio rewrite (it stays unported in the notebook export — sub-project 3 rewrites it against the service); Dockerfile; ground-truth dataset; RAGAS; README; deployment. `complete_mortgage_rag_pipeline.py` stays at the repo root untouched as the reference source throughout; deleting it is sub-project 4's call.
+FastAPI service; index persistence; the Gradio rewrite (it stays unported in the notebook export — sub-project 3 rewrites it against the service); Dockerfile; ground-truth dataset; RAGAS; README; deployment. `complete_docuchat_pipeline.py` stays at the repo root untouched as the reference source throughout; deleting it is sub-project 4's call.

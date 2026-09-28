@@ -1,4 +1,4 @@
-# Mortgage RAG — Sub-project 1: Package, Config, and Provider Seam
+# Docuchat — Sub-project 1: Package, Config, Profiles, and Provider Seam
 
 **Date:** 2026-09-27
 **Status:** Design approved, pending spec review
@@ -8,10 +8,16 @@
 
 ## Purpose
 
-Turn `complete_mortgage_rag_pipeline.py` — a Colab notebook export in which every
+Turn `complete_docuchat_pipeline.py` — a Colab notebook export in which every
 cell depends on globals defined above it — into an installable Python package that
 runs outside Colab, imports without downloading models, and exposes a single
 configurable entry point.
+
+The product is a general document-chat app: anyone uploads a stack of PDFs and
+asks questions about them. The pipeline is domain-agnostic, with the
+domain-specific parts (document-type taxonomy, section-heading patterns, answer
+prompt) factored into a swappable **domain profile**. Mortgage ships as the
+default profile; a generic profile ships alongside it.
 
 This is a portfolio project. Success means a hiring manager can clone the repo,
 install it, run the tests on a laptop with no GPU and no API key, and read code
@@ -28,8 +34,8 @@ to build now than to retrofit.
 | # | Scope | Status |
 |---|---|---|
 | 1 | Package, config, provider seam, bug fixes, unit tests, test CI | **this spec** |
-| 2 | Ground-truth dataset, retrieval/generation metrics, ablation, RAGAS | later |
-| 3 | FastAPI service, index persistence, Gradio rewrite, Docker, deploy | later |
+| 2 | Ground-truth dataset, retrieval/generation metrics, ablation (incl. mortgage-vs-generic profile arm), RAGAS | later |
+| 3 | FastAPI service, per-session isolated stores with TTL, upload caps, rate limiting, Gradio rewrite, Docker, deploy | later |
 | 4 | README, architecture diagram, demo recording, results tables | later |
 
 Each gets its own spec, plan, and implementation cycle.
@@ -48,6 +54,8 @@ Each gets its own spec, plan, and implementation cycle.
 | Reranker | `BAAI/bge-reranker-v2-m3` | 8192-token window vs. 512. Apache 2.0. |
 | Framework | Keep LlamaIndex | User's call. `VectorStoreIndex`, `Document`, `HuggingFaceEmbedding` port unchanged. |
 | Structure | Flat modules in one package | Directory-per-concern is ceremony at ~1000 lines. |
+| Generality | Domain-agnostic core, `DomainProfile` presets | Two implementations exist on day one (mortgage, generic), so the indirection is earned rather than speculative. |
+| Package name | `docuchat` | The app is not mortgage-specific any more. |
 | Perf testing | Structural assertions, not wall-clock | CI runners vary 2–3×; a flaky gate gets disabled. |
 
 ### Approaches considered and rejected
@@ -70,8 +78,9 @@ Each gets its own spec, plan, and implementation cycle.
 ```
 pyproject.toml
 .gitignore                    # *.gguf, indexes/, data/documents/, .env
-src/mortgage_rag/
+src/docuchat/
   config.py                   # Settings dataclass + from_env()
+  profiles.py                 # DomainProfile + PROFILES registry (mortgage, generic)
   models.py                   # lazy, cached model/LLM getters
   ingest.py                   # Docling → page dicts
   chunking.py                 # recursive split, semantic merge, table detection
@@ -161,6 +170,7 @@ file can be added when something needs one.
 | | `merge_threshold` | `0.75` |
 | | `merge_max_tokens` | `600` |
 | | `min_chunk_words` | `10` |
+| Domain | `domain_profile` | `"mortgage"` |
 | Classification | `use_llm_classification` | `True` |
 | | `classify_snippet_chars` | `500` |
 | Retrieval | `retrieval_mode` | `"hybrid"` |
@@ -309,7 +319,7 @@ Hard constraint: nothing in the default test run may download a model, load
 
 | File | Covers |
 |---|---|
-| `test_import_purity.py` | Subprocess-imports `mortgage_rag.pipeline` and asserts `torch`, `docling`, and `sentence_transformers` are absent from `sys.modules`. Guards the lazy-loading invariant that governs cold start. |
+| `test_import_purity.py` | Subprocess-imports `docuchat.pipeline` and asserts `torch`, `docling`, and `sentence_transformers` are absent from `sys.modules`. Guards the lazy-loading invariant that governs cold start. |
 | `test_call_budget.py` | With a fake LLM counting `.complete()` calls: full config makes exactly 3 (rewrite, decompose, answer); baseline makes exactly 1. Analogous budgets for encoder and cross-encoder invocations. |
 
 Call-count budgets are the highest-value latency guard available, because query
@@ -379,13 +389,15 @@ not "it is as good as before." Quality measurement begins in sub-project 2.
 
 1. `pip install -e .[dev]` and `pytest` pass on a clean machine with no GPU, no API
    key, and no model downloads.
-2. `python -c "import mortgage_rag.pipeline"` returns without loading `torch`,
+2. `python -c "import docuchat.pipeline"` returns without loading `torch`,
    `docling`, or `sentence_transformers`.
 3. `ask()` accepts a `Settings` whose four ablation switches measurably change
    which stages run (proven by the call-budget test).
-4. The smoke test answers a question about the fixture PDF with a page citation.
-5. CI is green on push.
-6. `notebooks/demo.ipynb` runs top to bottom and contains no pipeline logic.
+4. Switching `domain_profile` between `"mortgage"` and `"generic"` measurably
+   changes classification and chunking on the same input.
+5. The smoke test answers a question about the fixture PDF with a page citation.
+6. CI is green on push.
+7. `notebooks/demo.ipynb` runs top to bottom and contains no pipeline logic.
 
 ## Out of scope
 
