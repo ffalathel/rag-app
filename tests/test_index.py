@@ -44,3 +44,23 @@ def test_bm25_search_ranks_exact_term_match_first(text_nodes):
 
 def test_bm25_search_on_empty_corpus_returns_empty():
     assert BM25Index([]).search("anything", top_k=5) == []
+
+
+def test_bm25_tokenizer_keeps_accented_word_whole():
+    assert "café" in tokenize_for_bm25("café")
+
+
+def test_bm25_search_on_non_latin_corpus_does_not_raise(text_nodes, make_node):
+    # A single-node corpus gives every BM25Okapi term a non-positive idf
+    # (pre-existing rank_bm25 behavior, independent of tokenization), so this
+    # uses a multi-node corpus to keep the assertion meaningful.
+    node = make_node(text="مرحبا بالعالم", chunk_id=99)
+    idx = BM25Index(text_nodes + [node])
+    results = idx.search("مرحبا", 3)
+    assert results and results[0][0] is node
+
+
+def test_bm25_index_on_all_stopword_corpus_returns_empty(make_node):
+    node = make_node(text="the a an")
+    idx = BM25Index([node])
+    assert idx.search("the", top_k=5) == []

@@ -47,7 +47,7 @@ STOP_WORDS: frozenset[str] = frozenset(
 def tokenize_for_bm25(text: str) -> list[str]:
     """Lowercase, keep alnum/currency/percent runs, strip edge punctuation,
     drop stopwords and pure-punctuation tokens."""
-    raw_tokens = re.findall(r"[a-z0-9$%.,]+", text.lower())
+    raw_tokens = re.findall(r"[\w$%.,]+", text.lower())
     tokens = []
     for token in raw_tokens:
         token = token.strip(".,")
@@ -67,7 +67,8 @@ class BM25Index:
     def __init__(self, nodes: list[TextNode]):
         self.nodes = nodes
         self.corpus_tokens = [tokenize_for_bm25(node.get_content()) for node in nodes]
-        self.bm25 = BM25Okapi(self.corpus_tokens) if self.corpus_tokens else None
+        has_tokens = any(self.corpus_tokens)
+        self.bm25 = BM25Okapi(self.corpus_tokens) if has_tokens else None
 
     def search(self, query: str, top_k: int) -> list[tuple[TextNode, float]]:
         if self.bm25 is None:
