@@ -241,8 +241,10 @@ resolves it.
   `summary.md` reports error counts per arm.
 - A stale snapshot stops the run with a message naming `ingest` (see Snapshot
   format).
-- A missing API key when a selected arm needs one stops the run before any
-  question executes, naming the arm and the variable.
+- A missing API key with `--judge` stops the run before any question executes,
+  naming the variable. Without `--judge`, an arm that needs an LLM for rewrite
+  or decomposition is skipped instead, and `summary.md` lists it with the
+  reason.
 - There is no resume. An arm is cheap to rerun.
 
 ---
