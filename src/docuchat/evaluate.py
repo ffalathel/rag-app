@@ -341,6 +341,16 @@ ARMS: dict[str, tuple[str, dict]] = {
     "full/embed-bge-base": ("mortgage", {"embed_model_name": "BAAI/bge-base-en-v1.5"}),
 }
 
+# name -> the arm it's compared against in render_summary's "vs" table. An
+# arm run without its base also having been run gets no comparison row.
+COMPARE_TO: dict[str, str] = {
+    "+hybrid": "baseline",
+    "+rerank": "+hybrid",
+    "full": "+rerank",
+    "full/generic": "full",
+    "full/embed-bge-base": "full",
+}
+
 
 def arm_settings(name: str, base: Settings) -> Settings:
     """Apply arm `name`'s Settings overrides onto `base`."""
@@ -472,7 +482,13 @@ def _git_commit() -> str:
 
 
 def _recall_by_id(records: list[dict]) -> dict[str, float]:
-    return {r["id"]: r["retrieval"]["recall"] for r in records if "error" not in r}
+    # Matches aggregate()'s retrieval stats, which exclude unanswerable
+    # questions (they have no evidence, so recall is vacuous for them).
+    return {
+        r["id"]: r["retrieval"]["recall"]
+        for r in records
+        if "error" not in r and r["kind"] != "unanswerable"
+    }
 
 
 def _correctness_by_id(records: list[dict]) -> dict[str, float]:
@@ -490,8 +506,9 @@ def render_summary(
     validation: dict | None,
 ) -> str:
     """Render the Markdown eval summary: per-arm aggregate metrics, a
-    win/loss/tie table against each arm's predecessor in ARMS order, and
-    skipped-arm / unreachable-evidence / judge-validation notes."""
+    win/loss/tie table against each arm's COMPARE_TO base (when that base
+    was also run), and skipped-arm / unreachable-evidence /
+    judge-validation notes."""
     arm_names = [name for name in ARMS if name in arm_records]
     judged = any(any("verdict" in r for r in records) for records in arm_records.values())
     n_questions = len(next(iter(arm_records.values()))) if arm_records else 0
@@ -501,7 +518,7 @@ def render_summary(
     lines.append(f"- Commit: {_git_commit()}")
     lines.append(f"- Questions: {n_questions}")
     if judged:
-        lines.append(f"- Judge model: {Settings().judge_model}")
+        lines.append(f"- Judge model: {Settings.from_env().judge_model}")
     lines.append("")
 
     lines.append("## Arms")
@@ -518,7 +535,10 @@ def render_summary(
     lines.append("")
     lines.append("| arm | metric | wins | losses | ties |")
     lines.append("|---|---|---|---|---|")
-    for prev_name, cur_name in zip(arm_names, arm_names[1:]):
+    for cur_name in arm_names:
+        prev_name = COMPARE_TO.get(cur_name)
+        if prev_name is None or prev_name not in arm_records:
+            continue
         prev, cur = arm_records[prev_name], arm_records[cur_name]
         wins, losses, ties = win_loss(_recall_by_id(prev), _recall_by_id(cur))
         lines.append(f"| {cur_name} vs {prev_name} | recall | {wins} | {losses} | {ties} |")
@@ -660,6 +680,15 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
 
 def _cmd_judge_sample(args: argparse.Namespace) -> int:
+    validation_path = RESULTS_DIR / "judge_validation.yaml"
+    if validation_path.exists() and not args.force:
+        print(
+            f"{validation_path} already exists and may hold hand-entered human labels; "
+            "pass --force to overwrite it.",
+            file=sys.stderr,
+        )
+        return 2
+
     questions_by_id = {q["id"]: q for q in load_questions(QUESTIONS_PATH)}
 
     groups: dict[tuple[str, str], list[dict]] = {}
@@ -706,7 +735,7 @@ def _cmd_judge_sample(args: argparse.Namespace) -> int:
         )
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    with open(RESULTS_DIR / "judge_validation.yaml", "w") as f:
+    with open(validation_path, "w") as f:
         yaml.safe_dump(items, f, sort_keys=False)
     return 0
 
@@ -725,6 +754,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p_sample = sub.add_parser("judge-sample")
     p_sample.add_argument("--n", type=int, default=10)
+    p_sample.add_argument("--force", action="store_true")
 
     args = parser.parse_args(argv)
 

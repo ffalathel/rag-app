@@ -7,6 +7,7 @@ import pytest
 from docuchat.config import Settings
 from docuchat.evaluate import (
     ARMS,
+    COMPARE_TO,
     StubLLM,
     arm_settings,
     judge_agreement,
@@ -107,12 +108,17 @@ def test_run_arm_records_error_and_continues(fake_store, monkeypatch):
 
 
 def test_render_summary_contains_arms_na_winloss_and_skipped():
+    # q1 flips from a recall hit to a total miss (+hybrid loses); q2 is
+    # unanswerable with identical recall in both arms, which would count as
+    # a tie if it weren't excluded -- it must not show up in the win/loss row.
     arm_records = {
         "baseline": [
             {"id": "q1", "kind": "fact", "retrieval": {"hit": 1.0, "recall": 1.0, "mrr": 1.0, "candidate_recall": 1.0}, "llm_calls": 1},
+            {"id": "q2", "kind": "unanswerable", "retrieval": {"hit": 0.0, "recall": 0.0, "mrr": 0.0, "candidate_recall": 0.0}, "llm_calls": 1},
         ],
         "+hybrid": [
             {"id": "q1", "kind": "fact", "retrieval": {"hit": 1.0, "recall": 0.0, "mrr": 0.0, "candidate_recall": 1.0}, "llm_calls": 1},
+            {"id": "q2", "kind": "unanswerable", "retrieval": {"hit": 0.0, "recall": 0.0, "mrr": 0.0, "candidate_recall": 0.0}, "llm_calls": 1},
         ],
     }
     skipped = {"full": "ANTHROPIC_API_KEY is not set"}
@@ -123,6 +129,35 @@ def test_render_summary_contains_arms_na_winloss_and_skipped():
     assert "n/a" in out  # unjudged correctness
     assert "full" in out
     assert "ANTHROPIC_API_KEY is not set" in out
+    # brief-required win/loss assertion: q1 is the only counted question
+    # (unanswerable q2 is excluded), so it's 0 wins, 1 loss, 0 ties.
+    assert "| +hybrid vs baseline | recall | 0 | 1 | 0 |" in out
+
+
+def test_render_summary_uses_compare_to_not_arms_adjacency():
+    # Running only full, full/generic, and full/embed-bge-base: both later
+    # arms compare against "full" (their COMPARE_TO base, which was run),
+    # and "full" itself gets no row since its base ("+rerank") was not run.
+    assert COMPARE_TO["full/generic"] == "full"
+    assert COMPARE_TO["full/embed-bge-base"] == "full"
+
+    def _recs(recall):
+        return [{"id": "q1", "kind": "fact", "retrieval": {"hit": 1.0, "recall": recall, "mrr": 1.0, "candidate_recall": 1.0}, "llm_calls": 1}]
+
+    arm_records = {
+        "full": _recs(0.5),
+        "full/generic": _recs(1.0),
+        "full/embed-bge-base": _recs(0.0),
+    }
+    out = render_summary(arm_records, skipped={}, unreachable=[], validation=None)
+
+    assert "full/generic vs full" in out
+    assert "full/embed-bge-base vs full" in out
+    assert " vs full/generic" not in out
+    assert " vs full/embed-bge-base" not in out
+    # "full" has no run base (+rerank wasn't run), so it gets no comparison row.
+    for line in out.splitlines():
+        assert not line.startswith("| full vs")
 
 
 def test_main_run_unknown_arm_returns_2(capsys):
@@ -153,6 +188,35 @@ def test_judge_agreement_mixed():
          "human": {"correctness": None, "faithful": None, "refused": None}},
     ]
     assert judge_agreement(items) == {"agreement": 0.5, "n": 2}
+
+
+def test_judge_sample_refuses_to_overwrite_without_force(tmp_path, monkeypatch):
+    monkeypatch.setattr("docuchat.evaluate.RESULTS_DIR", tmp_path)
+    monkeypatch.setattr("docuchat.evaluate.QUESTIONS_PATH", tmp_path / "questions.yaml")
+    existing = tmp_path / "judge_validation.yaml"
+    existing.write_text("- human: {correctness: 2}\n")
+
+    rc = main(["judge-sample"])
+
+    assert rc == 2
+    assert existing.read_text() == "- human: {correctness: 2}\n"
+
+
+def test_render_summary_judge_model_from_env(monkeypatch):
+    monkeypatch.setenv("DOCUCHAT_JUDGE_MODEL", "x-judge")
+    arm_records = {
+        "baseline": [
+            {
+                "id": "q1",
+                "kind": "fact",
+                "retrieval": {"hit": 1.0, "recall": 1.0, "mrr": 1.0, "candidate_recall": 1.0},
+                "llm_calls": 1,
+                "verdict": {"correctness": 2, "faithful": True, "refused": False},
+            },
+        ],
+    }
+    out = render_summary(arm_records, skipped={}, unreachable=[], validation=None)
+    assert "x-judge" in out
 
 
 def test_judge_agreement_none_when_nothing_filled():
