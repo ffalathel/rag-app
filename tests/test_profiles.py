@@ -31,3 +31,8 @@ def test_every_profile_keeps_the_grounding_contract(name):
     prompt = PROFILES[name].answer_system_prompt
     assert "ONLY from the provided context" in prompt
     assert "cannot find this information" in prompt
+
+
+def test_search_domain_is_domain_specific():
+    assert PROFILES["mortgage"].search_domain == "mortgage document"
+    assert PROFILES["generic"].search_domain == "document"

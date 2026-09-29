@@ -63,11 +63,12 @@ def retrieve(query: str, store: Store, cfg: Settings) -> list[tuple[TextNode, fl
     return results[: cfg.top_k]
 
 
-def rewrite_query(user_query: str, llm) -> str:
+def rewrite_query(user_query: str, llm, cfg: Settings) -> str:
     """LLM rewrites vague question into a precise retrieval query."""
-    prompt = f"""You are a query rewriting assistant for a mortgage document search system.
-Rewrite the user's question to be more specific and comprehensive for searching mortgage documents.
-Add relevant mortgage/legal terminology. Keep it as a single search query.
+    domain = cfg.profile.search_domain
+    prompt = f"""You are a query rewriting assistant for a {domain} search system.
+Rewrite the user's question to be more specific and comprehensive for searching {domain}s.
+Add relevant {domain} terminology. Keep it as a single search query.
 
 User question: "{user_query}"
 
@@ -82,7 +83,8 @@ Rewritten query:"""
 
 def decompose_query(user_query: str, llm, cfg: Settings) -> list[str]:
     """Break complex questions into up to cfg.max_sub_queries focused sub-queries."""
-    prompt = f"""You are a query decomposition assistant for a mortgage document search system.
+    domain = cfg.profile.search_domain
+    prompt = f"""You are a query decomposition assistant for a {domain} search system.
 If the question is simple, return just the original question.
 If complex, break into 2-4 focused sub-questions.
 Return ONLY the sub-questions, one per line. No numbering, no bullets.

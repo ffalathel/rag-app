@@ -57,7 +57,7 @@ def ask(
 
     debug = {"original_query": query}
 
-    rewritten = rewrite_query(query, llm) if cfg.use_rewrite else query
+    rewritten = rewrite_query(query, llm, cfg) if cfg.use_rewrite else query
     debug["rewritten_query"] = rewritten
 
     sub_queries = decompose_query(rewritten, llm, cfg) if cfg.use_decomposition else [rewritten]

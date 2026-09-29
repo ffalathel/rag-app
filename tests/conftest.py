@@ -69,9 +69,11 @@ class _FakeLLM:
     def __init__(self, response):
         self._response = response
         self.calls = 0
+        self.prompts = []
 
     def complete(self, prompt):
         self.calls += 1
+        self.prompts.append(prompt)
         return self._response
 
 

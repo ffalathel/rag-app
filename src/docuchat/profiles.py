@@ -14,6 +14,7 @@ class DomainProfile:
     llm_categories: tuple[str, ...]
     section_patterns: tuple[str, ...]
     answer_system_prompt: str
+    search_domain: str
 
 
 # Ported verbatim from complete_mortgage_rag_pipeline.py:
@@ -112,6 +113,7 @@ PROFILES: dict[str, DomainProfile] = {
         llm_categories=_MORTGAGE_LLM_CATEGORIES,
         section_patterns=_MORTGAGE_SECTION_PATTERNS,
         answer_system_prompt=_MORTGAGE_ANSWER_PROMPT,
+        search_domain="mortgage document",
     ),
     "generic": DomainProfile(
         name="generic",
@@ -119,5 +121,6 @@ PROFILES: dict[str, DomainProfile] = {
         llm_categories=_GENERIC_LLM_CATEGORIES,
         section_patterns=_GENERIC_SECTION_PATTERNS,
         answer_system_prompt=_GENERIC_ANSWER_PROMPT,
+        search_domain="document",
     ),
 }

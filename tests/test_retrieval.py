@@ -36,12 +36,12 @@ def test_retrieve_dispatches_on_mode(mode, fake_store, make_node, monkeypatch):
 
 def test_rewrite_falls_back_to_original_on_empty_llm_output(fake_llm_returning):
     q = "what is the rate?"
-    assert rewrite_query(q, fake_llm_returning("")) == q
+    assert rewrite_query(q, fake_llm_returning(""), Settings()) == q
 
 
 def test_rewrite_falls_back_when_output_absurdly_long(fake_llm_returning):
     q = "what is the rate?"
-    assert rewrite_query(q, fake_llm_returning("x" * 600)) == q
+    assert rewrite_query(q, fake_llm_returning("x" * 600), Settings()) == q
 
 
 def test_decompose_returns_original_when_llm_returns_nothing(fake_llm_returning):
@@ -60,3 +60,27 @@ def test_decompose_strips_leading_markers_only(fake_llm_returning):
     result = decompose_query("q?", llm, Settings())
     assert "30-year fixed rate terms?" in result
     assert "escrow account details?" in result
+
+
+@pytest.mark.parametrize(
+    "profile,expect_mortgage",
+    [("mortgage", True), ("generic", False)],
+)
+def test_rewrite_query_prompt_uses_profile_search_domain(
+    profile, expect_mortgage, fake_llm_returning
+):
+    llm = fake_llm_returning("some rewritten query")
+    rewrite_query("what is the rate?", llm, Settings(domain_profile=profile))
+    assert (("mortgage" in llm.prompts[0]) is expect_mortgage)
+
+
+@pytest.mark.parametrize(
+    "profile,expect_mortgage",
+    [("mortgage", True), ("generic", False)],
+)
+def test_decompose_query_prompt_uses_profile_search_domain(
+    profile, expect_mortgage, fake_llm_returning
+):
+    llm = fake_llm_returning("q?")
+    decompose_query("q?", llm, Settings(domain_profile=profile))
+    assert (("mortgage" in llm.prompts[0]) is expect_mortgage)
