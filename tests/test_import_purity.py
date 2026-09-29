@@ -22,6 +22,7 @@ HEAVY = {"torch", "docling", "sentence_transformers"}
         "docuchat.pipeline",
         "docuchat.ingest",
         "docuchat.index",
+        "docuchat.retrieval",
     ],
 )
 def test_import_does_not_load_heavy_deps(module):

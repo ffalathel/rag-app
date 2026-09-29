@@ -4,6 +4,8 @@ import numpy as np
 import pytest
 from llama_index.core.schema import TextNode
 
+from docuchat.index import NODE_METADATA_KEYS
+
 
 class _StubEncoder:
     """Encoder stub: returns identical unit vectors for any input list."""
@@ -37,6 +39,52 @@ def fake_llm():
 @pytest.fixture
 def fake_llm_returning():
     return _FakeLLM
+
+
+@pytest.fixture
+def make_node():
+    """Factory for a TextNode with every NODE_METADATA_KEYS field defaulted,
+    so a test can pass only the metadata it cares about."""
+    defaults = {
+        "filename": "a.pdf",
+        "page_number": 1,
+        "doc_type": "Promissory Note",
+        "source_type": "docling",
+        "section_title": "Full Page",
+        "table_present": False,
+        "chunk_id": 0,
+    }
+
+    def _make(text="some text", **kw):
+        metadata = dict(defaults)
+        metadata.update({k: v for k, v in kw.items() if k in NODE_METADATA_KEYS})
+        extra = {k: v for k, v in kw.items() if k not in NODE_METADATA_KEYS}
+        return TextNode(text=text, metadata=metadata, **extra)
+
+    return _make
+
+
+class _RecordingBM25:
+    """BM25 stub: records every search() call and returns a fixed result list."""
+
+    def __init__(self, results):
+        self._results = results
+        self.calls = []
+
+    def search(self, query, top_k):
+        self.calls.append((query, top_k))
+        return self._results
+
+
+@pytest.fixture
+def fake_store(make_node):
+    """A Store-like object with a recording BM25 stub. vector_index is unused
+    directly -- tests dispatch through retrieval.vector_search, which they
+    monkeypatch."""
+    from docuchat.index import Store
+
+    results = [(make_node(text=f"doc {i}", chunk_id=i), 1.0 - i * 0.1) for i in range(3)]
+    return Store(vector_index=None, bm25=_RecordingBM25(results), nodes=[])
 
 
 @pytest.fixture
