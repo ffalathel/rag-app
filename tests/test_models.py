@@ -12,6 +12,7 @@ from docuchat.models import (
     get_cross_encoder,
     get_embed_model,
     get_encoder,
+    get_judge_llm,
     get_llm,
 )
 
@@ -91,6 +92,12 @@ def test_get_llm_gemini_without_api_key_raises_naming_the_variable(monkeypatch):
 def test_encoder_and_embed_model_share_one_loaded_model():
     cfg = Settings()
     assert get_encoder(cfg) is _sentence_transformer_of(get_embed_model(cfg))
+
+
+def test_get_judge_llm_requires_key(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
+        get_judge_llm(Settings())
 
 
 def test_cross_encoder_and_encoder_ignore_unrelated_settings_changes(monkeypatch):

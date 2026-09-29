@@ -15,11 +15,14 @@ dependencies = [
     "docling==2.130.0",
     "rank-bm25==0.2.2",
     "sentence-transformers==6.1.0",
+    "pyyaml==6.0.3",
+    "pypdfium2==5.13.0",
 ]
 
 [project.optional-dependencies]
 local-llm = ["llama-index-llms-llama-cpp==0.7.0", "llama-cpp-python==0.3.35"]
 dev = ["pytest==9.1.1"]
+eval-ragas = ["ragas==0.4.3"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

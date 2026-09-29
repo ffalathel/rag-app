@@ -90,6 +90,23 @@ def get_llm(cfg: Settings):
 
 
 @lru_cache(maxsize=1)
+def _load_judge_llm(judge_model, max_new_tokens):
+    """Separate cache from _load_llm so judging never evicts the answer LLM
+    from _load_llm's maxsize=1 cache."""
+    from llama_index.llms.anthropic import Anthropic
+
+    return Anthropic(model=judge_model, temperature=0.0, max_tokens=max_new_tokens)
+
+
+def get_judge_llm(cfg: Settings):
+    """Return the configured judge LLM (Anthropic only), used to score
+    answers during evaluation. Always uses temperature 0.0."""
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        raise RuntimeError("ANTHROPIC_API_KEY is not set; required for get_judge_llm")
+    return _load_judge_llm(cfg.judge_model, cfg.max_new_tokens)
+
+
+@lru_cache(maxsize=1)
 def _load_embed_model(embed_model_name):
     from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 

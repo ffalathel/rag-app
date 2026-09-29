@@ -82,7 +82,13 @@ def ask(
             seen.add(key)
             unique.append((node, score))
 
+    debug["candidates"] = [
+        (node.metadata.get("filename", "?"), node.metadata.get("page_number", "?"))
+        for node, _score in unique
+    ]
+
     if not unique:
+        debug["contexts"] = []
         return {
             "answer": "No relevant documents found.",
             "sources": [],
@@ -108,9 +114,10 @@ def ask(
     prompt = build_prompt(query, cleaned, cfg)
     answer = str(llm.complete(prompt)).strip()
 
-    sources, scores = [], []
+    sources, scores, contexts = [], [], []
     for node, score in cleaned:
         m = node.metadata
+        contexts.append(node.get_content())
         sources.append(
             {
                 "filename": m.get("filename", "?"),
@@ -122,6 +129,8 @@ def ask(
             }
         )
         scores.append(float(score))
+
+    debug["contexts"] = contexts
 
     return {
         "answer": answer,

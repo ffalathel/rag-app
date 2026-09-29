@@ -69,3 +69,9 @@ def test_invalid_domain_profile_raises():
 def test_profile_property_resolves():
     assert Settings().profile.name == "mortgage"
     assert Settings(domain_profile="generic").profile.name == "generic"
+
+
+def test_judge_model_default(monkeypatch):
+    assert Settings().judge_model == "claude-opus-5-5"
+    monkeypatch.setenv("DOCUCHAT_JUDGE_MODEL", "claude-haiku-5")
+    assert Settings.from_env().judge_model == "claude-haiku-5"

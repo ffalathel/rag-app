@@ -108,8 +108,12 @@ class Store:
     nodes: list[TextNode]
 
 
-def build_store(pages: list[dict], cfg: Settings) -> Store:
-    encoder = get_encoder(cfg)
-    nodes = build_nodes(pages, encoder, cfg)
+def store_from_nodes(nodes: list[TextNode], cfg: Settings) -> Store:
+    """Build a Store directly from already-chunked nodes."""
     vector_index = VectorStoreIndex(nodes=nodes, embed_model=get_embed_model(cfg))
     return Store(vector_index=vector_index, bm25=BM25Index(nodes), nodes=nodes)
+
+
+def build_store(pages: list[dict], cfg: Settings) -> Store:
+    encoder = get_encoder(cfg)
+    return store_from_nodes(build_nodes(pages, encoder, cfg), cfg)

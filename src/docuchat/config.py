@@ -91,6 +91,9 @@ class Settings:
     cross_encoder_max_length: int = 1024
     gguf_path: str = ""
 
+    # Evaluation
+    judge_model: str = "claude-opus-5-5"
+
     def __post_init__(self) -> None:
         if self.retrieval_mode not in _RETRIEVAL_MODES:
             raise ValueError(

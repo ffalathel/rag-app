@@ -3,7 +3,13 @@
 import sys
 
 from docuchat.config import Settings
-from docuchat.index import NODE_METADATA_KEYS, BM25Index, build_nodes, tokenize_for_bm25
+from docuchat.index import (
+    NODE_METADATA_KEYS,
+    BM25Index,
+    build_nodes,
+    store_from_nodes,
+    tokenize_for_bm25,
+)
 
 
 def test_nodes_carry_required_metadata(stub_encoder):
@@ -64,3 +70,15 @@ def test_bm25_index_on_all_stopword_corpus_returns_empty(make_node):
     node = make_node(text="the a an")
     idx = BM25Index([node])
     assert idx.search("the", top_k=5) == []
+
+
+def test_store_from_nodes_keeps_node_identity(make_node, monkeypatch):
+    from llama_index.core.embeddings import MockEmbedding
+
+    monkeypatch.setattr(
+        "docuchat.index.get_embed_model", lambda cfg: MockEmbedding(embed_dim=8)
+    )
+    nodes = [make_node(text="a", chunk_id=0), make_node(text="b", chunk_id=1)]
+    store = store_from_nodes(nodes, Settings())
+    assert store.nodes is nodes
+    assert len(store.bm25.nodes) == 2
