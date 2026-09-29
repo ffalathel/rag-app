@@ -3,7 +3,7 @@
 Replaces the notebook's hand-rolled OCR chain (preprocess_image,
 ocr_with_paddle, ocr_with_tesseract, ingest_pdf, ingest_all_pdfs) with
 Docling's layout/OCR/table-structure pipeline. Docling (and its torch
-dependency) is imported inside `load_pdf`, never at module scope, so
+dependency) is imported inside `_make_converter`, never at module scope, so
 importing this module stays cheap -- see test_import_purity.py.
 """
 
