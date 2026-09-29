@@ -13,7 +13,6 @@ def test_defaults_match_notebook_constants():
     assert cfg.top_k == 10
     assert cfg.rerank_top_n == 5
     assert cfg.min_rerank_score is None
-    assert cfg.llm_model == "claude-sonnet-5"
     assert cfg.cross_encoder_name == "BAAI/bge-reranker-v2-m3"
     assert cfg.cross_encoder_max_length == 1024
     assert cfg.max_new_tokens == 1024

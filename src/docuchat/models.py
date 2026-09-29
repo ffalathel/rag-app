@@ -7,14 +7,18 @@ module must never download a GGUF, load a HuggingFace model, or touch the
 network -- see tests/test_import_purity.py, which enforces this in a
 subprocess for every module in the package.
 
-Each getter is @lru_cache(maxsize=1) over a Settings instance, so it loads
-its model once per distinct config and reuses it afterwards.
+Each getter delegates to an @lru_cache(maxsize=1) loader keyed only on the
+Settings fields that model depends on, so changing an unrelated field (e.g.
+use_rerank between ablation arms) reuses the loaded model.
 """
 
 import os
 from functools import lru_cache
 
 from docuchat.config import Settings
+
+# used when Settings.llm_model is left empty; llamacpp takes gguf_path instead
+_DEFAULT_MODELS = {"anthropic": "claude-sonnet-5", "gemini": "gemini-3.7-flash"}
 
 
 @lru_cache(maxsize=1)
@@ -26,6 +30,19 @@ def _load_llm(llm_provider, llm_model, temperature, max_new_tokens, context_wind
         from llama_index.llms.anthropic import Anthropic
 
         return Anthropic(model=llm_model, temperature=temperature, max_tokens=max_new_tokens)
+
+    if llm_provider == "gemini":
+        from llama_index.llms.google_genai import GoogleGenAI
+
+        # max_tokens and context_window are both passed because GoogleGenAI
+        # fetches model metadata over the network when either is missing.
+        # Gemini 3 models may reject an explicit temperature.
+        return GoogleGenAI(
+            model=llm_model,
+            temperature=None if "gemini-3" in llm_model else temperature,
+            max_tokens=max_new_tokens,
+            context_window=context_window,
+        )
 
     # llm_provider == "llamacpp" (Settings validates there is no other value)
     from llama_index.llms.llama_cpp import LlamaCPP
@@ -40,7 +57,8 @@ def _load_llm(llm_provider, llm_model, temperature, max_new_tokens, context_wind
 
 
 def get_llm(cfg: Settings):
-    """Return the configured LLM (LlamaIndex `LLM`): Anthropic or LlamaCPP.
+    """Return the configured LLM (LlamaIndex `LLM`): Anthropic, Gemini, or
+    LlamaCPP. An empty `llm_model` means the provider's default model.
 
     The ANTHROPIC_API_KEY / gguf_path checks run on every call, not cached,
     so a config that later has the env var set (or the file created) is not
@@ -51,6 +69,13 @@ def get_llm(cfg: Settings):
             raise RuntimeError(
                 "ANTHROPIC_API_KEY is not set; required for llm_provider='anthropic'"
             )
+    elif cfg.llm_provider == "gemini":
+        # the google-genai SDK reads either variable itself
+        if not (os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")):
+            raise RuntimeError(
+                "GOOGLE_API_KEY (or GEMINI_API_KEY) is not set; "
+                "required for llm_provider='gemini'"
+            )
     else:
         if not cfg.gguf_path or not os.path.exists(cfg.gguf_path):
             raise RuntimeError(
@@ -58,7 +83,8 @@ def get_llm(cfg: Settings):
                 "required for llm_provider='llamacpp'"
             )
     return _load_llm(
-        cfg.llm_provider, cfg.llm_model, cfg.temperature, cfg.max_new_tokens,
+        cfg.llm_provider, cfg.llm_model or _DEFAULT_MODELS.get(cfg.llm_provider, ""),
+        cfg.temperature, cfg.max_new_tokens,
         cfg.context_window, cfg.gguf_path,
     )
 

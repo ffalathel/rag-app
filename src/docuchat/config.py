@@ -12,7 +12,7 @@ from typing import Optional, Union, get_args, get_origin
 from docuchat.profiles import PROFILES, DomainProfile
 
 _RETRIEVAL_MODES = {"vector", "bm25", "hybrid"}
-_LLM_PROVIDERS = {"anthropic", "llamacpp"}
+_LLM_PROVIDERS = {"anthropic", "gemini", "llamacpp"}
 
 _TRUE_VALUES = {"1", "true", "yes"}
 _FALSE_VALUES = {"0", "false", "no"}
@@ -82,7 +82,7 @@ class Settings:
 
     # Models
     llm_provider: str = "anthropic"
-    llm_model: str = "claude-sonnet-5"
+    llm_model: str = ""  # empty = provider default, see models._DEFAULT_MODELS
     temperature: float = 0.1
     max_new_tokens: int = 1024
     context_window: int = 4096
