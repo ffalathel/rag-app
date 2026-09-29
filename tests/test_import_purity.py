@@ -21,6 +21,7 @@ HEAVY = {"torch", "docling", "sentence_transformers", "llama_index.embeddings.hu
         "docuchat.models",
         "docuchat.pipeline",
         "docuchat.ingest",
+        "docuchat.judge",
         "docuchat.index",
         "docuchat.retrieval",
         "docuchat.rerank",
