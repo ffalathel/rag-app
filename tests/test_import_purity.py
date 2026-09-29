@@ -27,7 +27,6 @@ HEAVY = {"torch", "docling", "sentence_transformers"}
     ],
 )
 def test_import_does_not_load_heavy_deps(module):
-    pytest.importorskip(module)
     code = (
         f"import {module}, sys; "
         f"loaded = {HEAVY!r} & set(sys.modules); "

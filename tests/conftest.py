@@ -122,13 +122,61 @@ class _RecordingBM25:
 
 @pytest.fixture
 def fake_store(make_node):
-    """A Store-like object with a recording BM25 stub. vector_index is unused
-    directly -- tests dispatch through retrieval.vector_search, which they
-    monkeypatch."""
+    """A Store with a real 3-node VectorStoreIndex (MockEmbedding, so no
+    network/model load) and a recording BM25 stub. Tests that only exercise
+    BM25 dispatch monkeypatch retrieval.vector_search instead of relying on
+    the vector index's actual similarity ordering."""
+    from llama_index.core import VectorStoreIndex
+    from llama_index.core.embeddings import MockEmbedding
+
     from docuchat.index import Store
 
-    results = [(make_node(text=f"doc {i}", chunk_id=i), 1.0 - i * 0.1) for i in range(3)]
-    return Store(vector_index=None, bm25=_RecordingBM25(results), nodes=[])
+    nodes = [make_node(text=f"doc {i}", chunk_id=i) for i in range(3)]
+    results = [(nodes[i], 1.0 - i * 0.1) for i in range(3)]
+    vector_index = VectorStoreIndex(nodes=nodes, embed_model=MockEmbedding(embed_dim=8))
+    return Store(vector_index=vector_index, bm25=_RecordingBM25(results), nodes=nodes)
+
+
+@pytest.fixture
+def empty_store():
+    """A Store with zero nodes in both indexes, for zero-retrieval-result tests."""
+    from llama_index.core import VectorStoreIndex
+    from llama_index.core.embeddings import MockEmbedding
+
+    from docuchat.index import BM25Index, Store
+
+    vector_index = VectorStoreIndex(nodes=[], embed_model=MockEmbedding(embed_dim=8))
+    return Store(vector_index=vector_index, bm25=BM25Index([]), nodes=[])
+
+
+class _CallCountingEncoder:
+    """Encoder stub: counts calls and returns distinct unit vectors."""
+
+    def __init__(self):
+        self.calls = 0
+
+    def encode(self, texts, normalize_embeddings=True):
+        self.calls += 1
+        return np.eye(len(texts), 8, dtype=float)
+
+
+class _CallCountingCrossEncoder:
+    """Cross-encoder stub: counts calls and returns one descending score per pair."""
+
+    def __init__(self):
+        self.calls = 0
+
+    def predict(self, pairs):
+        self.calls += 1
+        n = len(pairs)
+        return [float(n - i) for i in range(n)]
+
+
+@pytest.fixture
+def fake_models():
+    """{"encoder": ..., "cross_encoder": ...} call-counting stubs, splatted
+    into ask()."""
+    return {"encoder": _CallCountingEncoder(), "cross_encoder": _CallCountingCrossEncoder()}
 
 
 @pytest.fixture
