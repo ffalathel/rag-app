@@ -24,7 +24,11 @@ def test_no_chunk_exceeds_max_tokens():
 
 
 def test_drops_chunks_below_min_chunk_words():
-    chunks = recursive_chunk("1. A\nshort\n\n2. B\n" + "word " * 50, Settings())
+    # "1. AA" and "2. BB" both match the numbered-header pattern, so this
+    # splits into a 3-word section and a 52-word one; only the long one
+    # survives the min_chunk_words filter.
+    chunks = recursive_chunk("1. AA\nshort\n\n2. BB\n" + "word " * 50, Settings())
+    assert len(chunks) == 1
     assert all(len(t.split()) >= Settings().min_chunk_words for t, _ in chunks)
 
 
