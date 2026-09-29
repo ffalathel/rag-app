@@ -52,15 +52,22 @@ def ask(
     """Run the full pipeline: optional rewrite -> optional decompose ->
     retrieve per sub-query -> dedup on node_key -> optional rerank ->
     clean_context -> build_prompt -> llm.complete."""
-    llm = llm or get_llm(cfg)
-    encoder = encoder or get_encoder(cfg)
-
     debug = {"original_query": query}
 
-    rewritten = rewrite_query(query, llm, cfg) if cfg.use_rewrite else query
+    if cfg.use_rewrite:
+        if llm is None:
+            llm = get_llm(cfg)
+        rewritten = rewrite_query(query, llm, cfg)
+    else:
+        rewritten = query
     debug["rewritten_query"] = rewritten
 
-    sub_queries = decompose_query(rewritten, llm, cfg) if cfg.use_decomposition else [rewritten]
+    if cfg.use_decomposition:
+        if llm is None:
+            llm = get_llm(cfg)
+        sub_queries = decompose_query(rewritten, llm, cfg)
+    else:
+        sub_queries = [rewritten]
     debug["sub_queries"] = sub_queries
 
     all_retrieved = []
@@ -85,12 +92,18 @@ def ask(
         }
 
     if cfg.use_rerank:
-        cross_encoder = cross_encoder or get_cross_encoder(cfg)
+        if cross_encoder is None:
+            cross_encoder = get_cross_encoder(cfg)
         reranked = rerank(query, unique, cross_encoder, cfg)
     else:
         reranked = sorted(unique, key=lambda pair: pair[1], reverse=True)[: cfg.rerank_top_n]
 
+    if encoder is None:
+        encoder = get_encoder(cfg)
     cleaned = clean_context(reranked, encoder, cfg)
+
+    if llm is None:
+        llm = get_llm(cfg)
 
     prompt = build_prompt(query, cleaned, cfg)
     answer = str(llm.complete(prompt)).strip()
