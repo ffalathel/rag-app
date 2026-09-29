@@ -1,8 +1,15 @@
+import sys
+import types
+
 import pytest
 
 from docuchat.config import Settings
 from docuchat.models import (
+    _load_cross_encoder,
+    _load_embed_model,
+    _load_llm,
     _sentence_transformer_of,
+    get_cross_encoder,
     get_embed_model,
     get_encoder,
     get_llm,
@@ -11,20 +18,20 @@ from docuchat.models import (
 
 def test_get_llm_is_cached(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    get_llm.cache_clear()
+    _load_llm.cache_clear()
     cfg = Settings()
     assert get_llm(cfg) is get_llm(cfg)
 
 
 def test_get_llm_without_api_key_raises_naming_the_variable(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    get_llm.cache_clear()
+    _load_llm.cache_clear()
     with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
         get_llm(Settings())
 
 
 def test_get_llm_llamacpp_without_gguf_path_raises():
-    get_llm.cache_clear()
+    _load_llm.cache_clear()
     with pytest.raises(RuntimeError, match="gguf_path"):
         get_llm(Settings(llm_provider="llamacpp", gguf_path=""))
 
@@ -33,3 +40,35 @@ def test_get_llm_llamacpp_without_gguf_path_raises():
 def test_encoder_and_embed_model_share_one_loaded_model():
     cfg = Settings()
     assert get_encoder(cfg) is _sentence_transformer_of(get_embed_model(cfg))
+
+
+def test_cross_encoder_and_encoder_ignore_unrelated_settings_changes(monkeypatch):
+    """Two Settings differing only in use_rerank must not evict/reload the
+    encoder or cross-encoder -- they're cached on a narrower key than the
+    whole Settings instance. Heavy constructors are swapped for fakes via
+    sys.modules so this never imports torch/sentence_transformers for real."""
+
+    class FakeHuggingFaceEmbedding:
+        def __init__(self, model_name):
+            self._model = object()
+
+    fake_hf_module = types.ModuleType("llama_index.embeddings.huggingface")
+    fake_hf_module.HuggingFaceEmbedding = FakeHuggingFaceEmbedding
+    monkeypatch.setitem(sys.modules, "llama_index.embeddings.huggingface", fake_hf_module)
+
+    class FakeCrossEncoder:
+        def __init__(self, name, max_length):
+            self.name = name
+
+    fake_st_module = types.ModuleType("sentence_transformers")
+    fake_st_module.CrossEncoder = FakeCrossEncoder
+    monkeypatch.setitem(sys.modules, "sentence_transformers", fake_st_module)
+
+    _load_embed_model.cache_clear()
+    _load_cross_encoder.cache_clear()
+
+    cfg_rerank = Settings(use_rerank=True)
+    cfg_no_rerank = Settings(use_rerank=False)
+
+    assert get_encoder(cfg_rerank) is get_encoder(cfg_no_rerank)
+    assert get_cross_encoder(cfg_rerank) is get_cross_encoder(cfg_no_rerank)

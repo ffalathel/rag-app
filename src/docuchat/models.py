@@ -18,44 +18,62 @@ from docuchat.config import Settings
 
 
 @lru_cache(maxsize=1)
+def _load_llm(llm_provider, llm_model, temperature, max_new_tokens, context_window, gguf_path):
+    """Construct the LLM, cached only on the fields it actually depends on so
+    an ablation arm that varies an unrelated Settings field (e.g. use_rerank)
+    does not evict and reload it."""
+    if llm_provider == "anthropic":
+        from llama_index.llms.anthropic import Anthropic
+
+        return Anthropic(model=llm_model, temperature=temperature, max_tokens=max_new_tokens)
+
+    # llm_provider == "llamacpp" (Settings validates there is no other value)
+    from llama_index.llms.llama_cpp import LlamaCPP
+
+    return LlamaCPP(
+        model_path=gguf_path,
+        temperature=temperature,
+        max_new_tokens=max_new_tokens,
+        context_window=context_window,
+        model_kwargs={"n_gpu_layers": -1},
+    )
+
+
 def get_llm(cfg: Settings):
-    """Return the configured LLM (LlamaIndex `LLM`): Anthropic or LlamaCPP."""
+    """Return the configured LLM (LlamaIndex `LLM`): Anthropic or LlamaCPP.
+
+    The ANTHROPIC_API_KEY / gguf_path checks run on every call, not cached,
+    so a config that later has the env var set (or the file created) is not
+    stuck with a cached failure.
+    """
     if cfg.llm_provider == "anthropic":
         if not os.environ.get("ANTHROPIC_API_KEY"):
             raise RuntimeError(
                 "ANTHROPIC_API_KEY is not set; required for llm_provider='anthropic'"
             )
-        from llama_index.llms.anthropic import Anthropic
-
-        return Anthropic(
-            model=cfg.llm_model,
-            temperature=cfg.temperature,
-            max_tokens=cfg.max_new_tokens,
-        )
-
-    # cfg.llm_provider == "llamacpp" (Settings validates there is no other value)
-    if not cfg.gguf_path or not os.path.exists(cfg.gguf_path):
-        raise RuntimeError(
-            f"gguf_path is not set to an existing file (got {cfg.gguf_path!r}); "
-            "required for llm_provider='llamacpp'"
-        )
-    from llama_index.llms.llama_cpp import LlamaCPP
-
-    return LlamaCPP(
-        model_path=cfg.gguf_path,
-        temperature=cfg.temperature,
-        max_new_tokens=cfg.max_new_tokens,
-        context_window=cfg.context_window,
-        model_kwargs={"n_gpu_layers": -1},
+    else:
+        if not cfg.gguf_path or not os.path.exists(cfg.gguf_path):
+            raise RuntimeError(
+                f"gguf_path is not set to an existing file (got {cfg.gguf_path!r}); "
+                "required for llm_provider='llamacpp'"
+            )
+    return _load_llm(
+        cfg.llm_provider, cfg.llm_model, cfg.temperature, cfg.max_new_tokens,
+        cfg.context_window, cfg.gguf_path,
     )
 
 
 @lru_cache(maxsize=1)
-def get_embed_model(cfg: Settings):
-    """Return the configured HuggingFaceEmbedding."""
+def _load_embed_model(embed_model_name):
     from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
-    return HuggingFaceEmbedding(model_name=cfg.embed_model_name)
+    return HuggingFaceEmbedding(model_name=embed_model_name)
+
+
+def get_embed_model(cfg: Settings):
+    """Return the configured HuggingFaceEmbedding, cached only on
+    embed_model_name."""
+    return _load_embed_model(cfg.embed_model_name)
 
 
 def _sentence_transformer_of(embed_model):
@@ -78,21 +96,26 @@ def _sentence_transformer_of(embed_model):
     return embed_model._model
 
 
-@lru_cache(maxsize=1)
 def get_encoder(cfg: Settings):
     """Return the SentenceTransformer underlying get_embed_model(cfg).
 
     Not a second load: bge-small was being loaded twice in the notebook
     (once via HuggingFaceEmbedding, once via a standalone SentenceTransformer),
     wasting a load and ~130MB. This getter reuses the one HuggingFaceEmbedding
-    already holds.
+    already holds -- cached only on embed_model_name via get_embed_model, so
+    still one loaded model, not two.
     """
     return _sentence_transformer_of(get_embed_model(cfg))
 
 
 @lru_cache(maxsize=1)
-def get_cross_encoder(cfg: Settings):
-    """Return the configured CrossEncoder reranker."""
+def _load_cross_encoder(cross_encoder_name, cross_encoder_max_length):
     from sentence_transformers import CrossEncoder
 
-    return CrossEncoder(cfg.cross_encoder_name, max_length=cfg.cross_encoder_max_length)
+    return CrossEncoder(cross_encoder_name, max_length=cross_encoder_max_length)
+
+
+def get_cross_encoder(cfg: Settings):
+    """Return the configured CrossEncoder reranker, cached only on
+    cross_encoder_name and cross_encoder_max_length."""
+    return _load_cross_encoder(cfg.cross_encoder_name, cfg.cross_encoder_max_length)
