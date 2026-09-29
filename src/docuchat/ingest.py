@@ -28,7 +28,7 @@ def _pages_from_texts(filename: str, texts: list[str], cfg: Settings) -> list[di
                 "page_number": i,
                 "text": text,
                 "source_type": "docling",
-                "doc_type": "unknown",
+                "doc_type": "Unknown",
             }
         )
     return pages

@@ -6,6 +6,7 @@ real_store fixture -- which itself calls get_llm -- never runs keyless).
 """
 
 import os
+from pathlib import Path
 
 import pytest
 
@@ -28,7 +29,7 @@ pytestmark = [
 @pytest.fixture(scope="module")
 def real_store():
     cfg = Settings()
-    pages = load_pdf("tests/fixtures/cfpb_closing_disclosure.pdf", cfg)
+    pages = load_pdf(Path(__file__).parent / "fixtures" / "cfpb_closing_disclosure.pdf", cfg)
     pages = classify_pages(pages, get_llm(cfg), cfg)
     return build_store(pages, cfg)
 

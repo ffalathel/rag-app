@@ -8,7 +8,7 @@ import sys
 
 import pytest
 
-HEAVY = {"torch", "docling", "sentence_transformers"}
+HEAVY = {"torch", "docling", "sentence_transformers", "llama_index.embeddings.huggingface"}
 
 
 @pytest.mark.parametrize(

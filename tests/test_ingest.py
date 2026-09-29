@@ -32,7 +32,7 @@ def test_pages_from_texts_shape():
     assert page["page_number"] == 1
     assert page["text"] == "x" * 100
     assert page["source_type"] == "docling"
-    assert page["doc_type"] == "unknown"
+    assert page["doc_type"] == "Unknown"
 
 
 def test_load_directory_returns_empty_for_no_pdfs(tmp_path):
@@ -41,7 +41,7 @@ def test_load_directory_returns_empty_for_no_pdfs(tmp_path):
 
 @pytest.mark.integration
 def test_load_pdf_extracts_text_and_pages():
-    pages = load_pdf("tests/fixtures/cfpb_closing_disclosure.pdf", Settings())
+    pages = load_pdf(Path(__file__).parent / "fixtures" / "cfpb_closing_disclosure.pdf", Settings())
     assert len(pages) >= 1
     assert all(set(p) == PAGE_KEYS for p in pages)
     assert any("Closing Disclosure" in p["text"] for p in pages)

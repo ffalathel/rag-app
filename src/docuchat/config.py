@@ -119,6 +119,9 @@ class Settings:
             env_name = f"DOCUCHAT_{f.name.upper()}"
             raw = os.environ.get(env_name)
             if raw is not None:
-                kwargs[f.name] = _cast(f.type, raw)
+                try:
+                    kwargs[f.name] = _cast(f.type, raw)
+                except ValueError as exc:
+                    raise ValueError(f"{env_name}={raw!r}: expected {f.type}") from exc
         kwargs.update(overrides)
         return cls(**kwargs)

@@ -41,6 +41,12 @@ def test_from_env_overrides_take_precedence(monkeypatch):
     assert Settings.from_env(top_k=3).top_k == 3
 
 
+def test_from_env_cast_error_names_the_variable(monkeypatch):
+    monkeypatch.setenv("DOCUCHAT_TOP_K", "ten")
+    with pytest.raises(ValueError, match="DOCUCHAT_TOP_K"):
+        Settings.from_env()
+
+
 def test_settings_is_hashable_for_lru_cache():
     assert hash(Settings()) == hash(Settings())
 
