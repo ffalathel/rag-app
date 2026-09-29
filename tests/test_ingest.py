@@ -6,6 +6,8 @@ wiring itself is only exercised by the integration test, which downloads
 models on first run.
 """
 
+from pathlib import Path
+
 import pytest
 
 from docuchat.config import Settings
@@ -43,3 +45,18 @@ def test_load_pdf_extracts_text_and_pages():
     assert len(pages) >= 1
     assert all(set(p) == PAGE_KEYS for p in pages)
     assert any("Closing Disclosure" in p["text"] for p in pages)
+
+
+def test_load_directory_finds_pdfs_case_insensitively_in_sorted_order(tmp_path, monkeypatch):
+    # A naive glob("*.pdf") + glob("*.PDF") would return REPORT.PDF twice on a
+    # case-insensitive filesystem; iterdir + suffix.lower() must not.
+    for name in ("b_lower.pdf", "REPORT.PDF", "notes.txt"):
+        (tmp_path / name).write_bytes(b"%PDF-1.4\n")
+
+    seen = []
+    monkeypatch.setattr(
+        "docuchat.ingest.load_pdf",
+        lambda path, cfg: (seen.append(Path(path).name), [])[1],
+    )
+    load_directory(tmp_path, Settings())
+    assert seen == ["REPORT.PDF", "b_lower.pdf"]
