@@ -19,6 +19,50 @@ def stub_encoder():
     return _StubEncoder()
 
 
+class _IdenticalVectorEncoder:
+    """Encoder stub: same as _StubEncoder, returns identical unit vectors for
+    any input list so every pair looks like a near-duplicate."""
+
+    def encode(self, texts, normalize_embeddings=True):
+        return np.ones((len(texts), 8), dtype=float) / np.sqrt(8)
+
+
+@pytest.fixture
+def identical_vector_encoder():
+    return _IdenticalVectorEncoder()
+
+
+class _DistinctVectorEncoder:
+    """Encoder stub: returns orthogonal unit vectors, one axis per input, so
+    no two texts ever look like near-duplicates."""
+
+    def encode(self, texts, normalize_embeddings=True):
+        return np.eye(len(texts), dtype=float)
+
+
+@pytest.fixture
+def distinct_vector_encoder():
+    return _DistinctVectorEncoder()
+
+
+class _RecordingCrossEncoder:
+    """Cross-encoder stub: records the (query, text) pairs it was given and
+    returns descending scores, one per pair."""
+
+    def __init__(self):
+        self.pairs = []
+
+    def predict(self, pairs):
+        self.pairs.extend(pairs)
+        n = len(pairs)
+        return [float(n - i) for i in range(n)]
+
+
+@pytest.fixture
+def recording_cross_encoder():
+    return _RecordingCrossEncoder()
+
+
 class _FakeLLM:
     """LLM stub: counts calls and returns a fixed response string."""
 
