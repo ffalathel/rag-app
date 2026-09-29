@@ -17,6 +17,7 @@ HEAVY = {"torch", "docling", "sentence_transformers"}
         "docuchat",
         "docuchat.config",
         "docuchat.chunking",
+        "docuchat.classify",
         "docuchat.models",
         "docuchat.pipeline",
         "docuchat.ingest",
