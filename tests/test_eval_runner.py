@@ -37,8 +37,9 @@ QUESTIONS = [
 
 
 @pytest.fixture(autouse=True)
-def _no_real_cross_encoder(monkeypatch, fake_models):
-    # "+rerank" arms would otherwise load bge-reranker from the HF cache (absent in CI).
+def _no_real_models(monkeypatch, fake_models):
+    # ask() would otherwise load the embedder and reranker from the HF cache (absent in CI).
+    monkeypatch.setattr("docuchat.pipeline.get_encoder", lambda cfg: fake_models["encoder"])
     monkeypatch.setattr("docuchat.pipeline.get_cross_encoder", lambda cfg: fake_models["cross_encoder"])
 
 
