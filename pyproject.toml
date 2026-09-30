@@ -22,7 +22,10 @@ dependencies = [
 [project.optional-dependencies]
 local-llm = ["llama-index-llms-llama-cpp==0.7.0", "llama-cpp-python==0.3.35"]
 dev = ["pytest==9.1.1"]
-eval-ragas = ["ragas==0.4.3"]
+# langchain-community is pinned below 0.4: 0.4.x dropped the ChatVertexAI/
+# VertexAI integrations that ragas==0.4.3 imports unconditionally at
+# `import ragas` time, which otherwise breaks the extra on a fresh install.
+eval-ragas = ["ragas==0.4.3", "langchain-community==0.3.31"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

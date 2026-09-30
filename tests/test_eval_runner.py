@@ -13,6 +13,7 @@ from docuchat.evaluate import (
     judge_agreement,
     main,
     needs_llm,
+    ragas_scores,
     render_summary,
     run_arm,
 )
@@ -224,6 +225,72 @@ def test_render_summary_judge_model_from_env(monkeypatch):
     }
     out = render_summary(arm_records, skipped={}, unreachable=[], validation=None)
     assert "x-judge" in out
+
+
+def test_ragas_missing_gives_install_hint(monkeypatch):
+    real_import = __import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "ragas" or name.startswith("ragas."):
+            raise ImportError("no ragas")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.__import__", fake_import)
+
+    with pytest.raises(SystemExit) as exc_info:
+        main(["run", "--ragas"])
+    assert "eval-ragas" in str(exc_info.value)
+
+
+@pytest.mark.integration
+def test_ragas_scores_on_two_records():
+    records = [
+        {
+            "question": "What is the loan amount?",
+            "answer": "The loan amount is $100,000.",
+            "contexts": ["The borrower's loan amount is $100,000, per Section 2."],
+        },
+        {
+            "question": "Who is the lender?",
+            "answer": "The lender is Acme Bank.",
+            "contexts": ["Acme Bank is the lender under this agreement."],
+        },
+    ]
+    scores = ragas_scores(records, Settings())
+
+    assert 0.0 <= scores["ragas_faithfulness"] <= 1.0
+    assert 0.0 <= scores["ragas_answer_relevancy"] <= 1.0
+
+
+def test_render_summary_shows_ragas_columns_when_records_carry_them():
+    arm_records = {
+        "baseline": [
+            {
+                "id": "q1",
+                "kind": "fact",
+                "retrieval": {"hit": 1.0, "recall": 1.0, "mrr": 1.0, "candidate_recall": 1.0},
+                "llm_calls": 1,
+                "ragas_faithfulness": 0.8,
+                "ragas_answer_relevancy": 0.9,
+            },
+        ],
+        "+hybrid": [
+            {
+                "id": "q1",
+                "kind": "fact",
+                "retrieval": {"hit": 1.0, "recall": 1.0, "mrr": 1.0, "candidate_recall": 1.0},
+                "llm_calls": 1,
+            },
+        ],
+    }
+    out = render_summary(arm_records, skipped={}, unreachable=[], validation=None)
+
+    assert "ragas_faithfulness" in out
+    assert "ragas_answer_relevancy" in out
+    assert "0.800" in out
+    lines = [l for l in out.splitlines() if l.startswith("| +hybrid |")]
+    assert len(lines) == 1
+    assert "n/a" in lines[0]
 
 
 def test_judge_agreement_none_when_nothing_filled():

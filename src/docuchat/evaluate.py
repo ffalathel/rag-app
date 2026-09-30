@@ -133,12 +133,21 @@ def aggregate(records: list[dict]) -> dict[str, dict]:
         "judge_errors": {"mean": len(judge_error_records), "ci": None, "n": len(judge_error_records)},
     }
 
+    # Optional: only present when records carry RAGAS cross-check scores
+    # (added by `run --ragas`); see render_summary.
+    ragas_stats = {
+        name: _stat([r[name] for r in non_errored if name in r])
+        for name in ("ragas_faithfulness", "ragas_answer_relevancy")
+        if any(name in r for r in non_errored)
+    }
+
     return {
         **retrieval_stats,
         **correctness_stats,
         **refusal_stats,
         "llm_calls": llm_calls_stat,
         **counts,
+        **ragas_stats,
     }
 
 
@@ -421,6 +430,7 @@ def run_arm(
             record.update(
                 {
                     "answer": result["answer"],
+                    "contexts": debug["contexts"],
                     "sources": [[f, p] for f, p in context_pages],
                     "candidates": [[f, p] for f, p in candidates],
                     "retrieval": retrieval_metrics(evidence, context_pages, candidates),
@@ -440,6 +450,58 @@ def run_arm(
             record["error"] = str(exc)
         records.append(record)
     return records
+
+
+# --- RAGAS cross-check -------------------------------------------------------
+
+
+def ragas_scores(records: list[dict], cfg: Settings) -> dict[str, float]:
+    """Mean RAGAS faithfulness and answer-relevancy over `records` (each
+    needs "question", "answer", "contexts"; records with "error" are
+    skipped).
+
+    Uses ragas 0.4.3's `ragas.evaluate` with the `ragas.metrics.faithfulness`
+    and `ragas.metrics.answer_relevancy` metric objects,
+    `ragas.llms.LlamaIndexLLMWrapper` around `models.get_judge_llm(cfg)`
+    (`cfg.judge_model`, Anthropic), and
+    `ragas.embeddings.LlamaIndexEmbeddingsWrapper` around
+    `models.get_embed_model(cfg)` (`cfg.embed_model_name`, a HuggingFace/
+    sentence-transformers embedding). `ragas` is imported here, not at
+    module scope, so importing this module never pulls it in (see
+    tests/test_import_purity.py).
+    """
+    import numpy as np
+    from ragas import evaluate as ragas_evaluate
+    from ragas.dataset_schema import EvaluationDataset
+    from ragas.embeddings import LlamaIndexEmbeddingsWrapper
+    from ragas.llms import LlamaIndexLLMWrapper
+    from ragas.metrics import answer_relevancy, faithfulness
+
+    from docuchat.models import get_embed_model, get_judge_llm
+
+    rows = [
+        {"user_input": r["question"], "response": r["answer"], "retrieved_contexts": r["contexts"]}
+        for r in records
+        if "error" not in r
+    ]
+    if not rows:
+        return {"ragas_faithfulness": float("nan"), "ragas_answer_relevancy": float("nan")}
+
+    dataset = EvaluationDataset.from_list(rows)
+    llm = LlamaIndexLLMWrapper(get_judge_llm(cfg))
+    embeddings = LlamaIndexEmbeddingsWrapper(get_embed_model(cfg))
+
+    result = ragas_evaluate(
+        dataset,
+        metrics=[faithfulness, answer_relevancy],
+        llm=llm,
+        embeddings=embeddings,
+        show_progress=False,
+    )
+    return {
+        "ragas_faithfulness": float(np.nanmean(result["faithfulness"])),
+        "ragas_answer_relevancy": float(np.nanmean(result["answer_relevancy"])),
+    }
 
 
 # --- Summary report ------------------------------------------------------------
@@ -511,6 +573,10 @@ def render_summary(
     judge-validation notes."""
     arm_names = [name for name in ARMS if name in arm_records]
     judged = any(any("verdict" in r for r in records) for records in arm_records.values())
+    has_ragas = any(
+        any("ragas_faithfulness" in r for r in records) for records in arm_records.values()
+    )
+    metric_names = _METRIC_NAMES + (("ragas_faithfulness", "ragas_answer_relevancy") if has_ragas else ())
     n_questions = len(next(iter(arm_records.values()))) if arm_records else 0
 
     lines = ["# Evaluation Summary", ""]
@@ -523,11 +589,11 @@ def render_summary(
 
     lines.append("## Arms")
     lines.append("")
-    lines.append("| arm | " + " | ".join(_METRIC_NAMES) + " |")
-    lines.append("|---|" + "---|" * len(_METRIC_NAMES))
+    lines.append("| arm | " + " | ".join(metric_names) + " |")
+    lines.append("|---|" + "---|" * len(metric_names))
     for name in arm_names:
         agg = aggregate(arm_records[name])
-        row = " | ".join(_fmt_stat(agg[m]) for m in _METRIC_NAMES)
+        row = " | ".join(_fmt_stat(agg.get(m, {"mean": None})) for m in metric_names)
         lines.append(f"| {name} | {row} |")
     lines.append("")
 
@@ -618,6 +684,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
             import ragas  # noqa: F401
         except ImportError:
             raise SystemExit("ragas is not installed; run `pip install -e .[eval-ragas]`")
+        args.judge = True
 
     base_cfg = Settings.from_env()
 
@@ -663,8 +730,15 @@ def _cmd_run(args: argparse.Namespace) -> int:
         records = run_arm(name, questions, store, cfg, answer_llm, judge_llm=judge_llm)
         arm_records[name] = records
 
+        arm_ragas = None
+        if args.ragas:
+            arm_ragas = ragas_scores(records, cfg)
+            for r in records:
+                if "error" not in r:
+                    r.update(arm_ragas)
+
         with open(RESULTS_DIR / f"{name.replace('/', '_')}.json", "w") as f:
-            json.dump(records, f, indent=2)
+            json.dump({"records": records, "ragas": arm_ragas}, f, indent=2)
 
     validation = None
     validation_path = RESULTS_DIR / "judge_validation.yaml"
@@ -697,7 +771,7 @@ def _cmd_judge_sample(args: argparse.Namespace) -> int:
         if not path.exists():
             continue
         with open(path) as f:
-            records = json.load(f)
+            records = json.load(f)["records"]
         for r in records:
             if "verdict" in r and "judge_error" not in r["verdict"]:
                 groups.setdefault((name, r["kind"]), []).append(r)
