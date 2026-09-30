@@ -470,6 +470,13 @@ def ragas_scores(records: list[dict], cfg: Settings) -> dict[str, float]:
     module scope, so importing this module never pulls it in (see
     tests/test_import_purity.py).
     """
+    import os
+
+    # ragas' usage telemetry posts synchronously from inside its event loop and
+    # stalls evaluate() for minutes when the endpoint is slow; it's also a
+    # third-party data send the user didn't ask for. Respect an explicit opt-in.
+    os.environ.setdefault("RAGAS_DO_NOT_TRACK", "true")
+
     import numpy as np
     from ragas import evaluate as ragas_evaluate
     from ragas.dataset_schema import EvaluationDataset
@@ -488,7 +495,9 @@ def ragas_scores(records: list[dict], cfg: Settings) -> dict[str, float]:
         return {"ragas_faithfulness": float("nan"), "ragas_answer_relevancy": float("nan")}
 
     dataset = EvaluationDataset.from_list(rows)
-    llm = LlamaIndexLLMWrapper(get_judge_llm(cfg))
+    # bypass_temperature: ragas re-adds a temperature kwarg that newer Claude
+    # models reject (llama-index already drops it for them).
+    llm = LlamaIndexLLMWrapper(get_judge_llm(cfg), bypass_temperature=True)
     embeddings = LlamaIndexEmbeddingsWrapper(get_embed_model(cfg))
 
     result = ragas_evaluate(
@@ -840,4 +849,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    from dotenv import load_dotenv
+
+    load_dotenv()  # ANTHROPIC_API_KEY etc. from a gitignored file at the repo root
     raise SystemExit(main())
