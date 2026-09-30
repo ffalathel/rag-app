@@ -36,6 +36,12 @@ QUESTIONS = [
 ]
 
 
+@pytest.fixture(autouse=True)
+def _no_real_cross_encoder(monkeypatch, fake_models):
+    # "+rerank" arms would otherwise load bge-reranker from the HF cache (absent in CI).
+    monkeypatch.setattr("docuchat.pipeline.get_cross_encoder", lambda cfg: fake_models["cross_encoder"])
+
+
 def test_arm_settings_rerank():
     cfg = arm_settings("+rerank", Settings())
     assert cfg.use_rerank is True
