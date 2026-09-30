@@ -136,7 +136,7 @@
   question: In the sample where the borrower paid off the seller's second lien outside of closing, how much was it?
   reference_answer: $5,000, paid outside of closing (P.O.C.) by the borrower.
   evidence:
-    - {filename: cfpb_closing_disclosure_h25d1_refinance.pdf, page: 2}
+    - {filename: cfpb_closing_disclosure_h25d_seller_second_lien.pdf, page: 2}
   kind: fact
   notes: "File is named '_refinance' but the form (H-25(D)) is a purchase-transaction sample about satisfying the seller's junior lien; the question avoids calling it a refinance."
 
@@ -226,9 +226,9 @@
   question: On the refinance Closing Disclosure, what went into the initial escrow deposit at closing?
   reference_answer: $576.95 total, homeowner's insurance $201.66, mortgage insurance $164.70, property taxes $210.60, and a -$0.01 aggregate adjustment.
   evidence:
-    - {filename: cfpb_closing_disclosure_h25e_balloon.pdf, page: 3}
+    - {filename: cfpb_closing_disclosure_h25e_refinance.pdf, page: 3}
   kind: table
-  notes: "File cfpb_closing_disclosure_h25e_balloon.pdf is really H-25(E), the refinance CD matching LE H-24(D), despite its '_balloon' filename. H-25(G) page 3 has an identical escrow block ($576.95); a retriever returning that page instead scores a miss."
+  notes: "File cfpb_closing_disclosure_h25e_refinance.pdf is H-25(E), the refinance CD matching LE H-24(D). H-25(G) page 3 has an identical escrow block ($576.95); a retriever returning that page instead scores a miss."
 
 # --- multi_hop ----------------------------------------------------------------
 
@@ -264,9 +264,9 @@
   reference_answer: They went down slightly, from $3,521 on the Loan Estimate to $3,495.50 at closing.
   evidence:
     - {filename: cfpb_loan_estimate_h24d_refinance.pdf, page: 2}
-    - {filename: cfpb_closing_disclosure_h25e_balloon.pdf, page: 2}
+    - {filename: cfpb_closing_disclosure_h25e_refinance.pdf, page: 2}
   kind: multi_hop
-  notes: "Cross-document. Pairs LE H-24(D) with CD H-25(E); the H-25(E) cover page says it illustrates the H-24(D) transaction. The CD file is misnamed '_balloon'. Loan amount, rate and P&I match ($150,000, 4.25%, $737.91)."
+  notes: "Cross-document. Pairs LE H-24(D) with CD H-25(E); the H-25(E) cover page says it illustrates the H-24(D) transaction. Loan amount, rate and P&I match ($150,000, 4.25%, $737.91)."
 
 - id: fixed-shoppable-within-tolerance
   question: The toolkit says fees for services I shop for generally can't rise more than 10%. Did the fixed-rate loan's shoppable services stay within that?
