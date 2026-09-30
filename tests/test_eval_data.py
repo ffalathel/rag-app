@@ -1,12 +1,15 @@
 """Tests for ground-truth loading, validation, and node snapshots."""
 
+import re
 import shutil
+from pathlib import Path
 
 import pytest
 from llama_index.core.schema import TextNode
 
 from docuchat.config import Settings
 from docuchat.evaluate import (
+    CORPUS_DIR,
     INGEST_FIELDS,
     StaleSnapshotError,
     corpus_hashes,
@@ -165,3 +168,41 @@ def test_corpus_hashes_sorted_by_filename(corpus_dir):
     hashes = corpus_hashes(corpus_dir)
     assert list(hashes.keys()) == sorted(hashes.keys())
     assert set(hashes.keys()) == {"cfpb_closing_disclosure.pdf"}
+
+
+def _parse_sources_md(path: Path) -> list[dict[str, str]]:
+    """Parse the `file | origin URL | sha256 | document type | pages | scanned`
+    table in SOURCES.md into a list of row dicts."""
+    rows = []
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line.startswith("|"):
+            continue
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        if cells[0] in ("file", "") or set(cells[0]) <= {"-"}:
+            continue
+        rows.append(
+            {
+                "file": cells[0],
+                "origin_url": cells[1],
+                "sha256": cells[2],
+                "document_type": cells[3],
+                "pages": cells[4],
+                "scanned": cells[5],
+            }
+        )
+    return rows
+
+
+def test_sources_md_matches_corpus():
+    rows = _parse_sources_md(CORPUS_DIR / "SOURCES.md")
+
+    corpus_filenames = {p.name for p in CORPUS_DIR.glob("*.pdf")}
+    assert {row["file"] for row in rows} == corpus_filenames
+
+    actual_hashes = corpus_hashes(CORPUS_DIR)
+    for row in rows:
+        assert re.fullmatch(r"[0-9a-f]{64}", row["sha256"]), row["file"]
+        assert row["sha256"] == actual_hashes[row["file"]], row["file"]
+
+    assert any(row["scanned"].lower().startswith("yes") for row in rows)
