@@ -1,0 +1,361 @@
+# Ground-truth questions for the docuchat evaluation harness.
+# Evidence pages are 1-based physical PDF page indexes (never the printed page label).
+# DRAFT: pending owner verification (see task 9, step 5).
+
+# --- fact ---------------------------------------------------------------------
+
+- id: le-fixed-rate-lock-expiry
+  question: On the fixed-rate Loan Estimate, how long is my interest rate locked for?
+  reference_answer: Until 4/16/2013 at 5:00 p.m. EDT.
+  evidence:
+    - {filename: cfpb_loan_estimate_h24b_fixed_rate.pdf, page: 2}
+  kind: fact
+  notes: ""
+
+- id: cd-fixed-settlement-agent
+  question: Which company is handling the closing for the fixed-rate home purchase?
+  reference_answer: Epsilon Title Co. is the settlement agent (file # 12-3456).
+  evidence:
+    - {filename: cfpb_closing_disclosure_h25b.pdf, page: 2}
+  kind: fact
+  notes: ""
+
+- id: le-fixed-late-fee
+  question: Under the fixed-rate loan offer, what does it cost me if I pay my mortgage late?
+  reference_answer: If the payment is more than 15 days late, the lender charges a late fee of 5% of the monthly principal and interest payment.
+  evidence:
+    - {filename: cfpb_loan_estimate_h24b_fixed_rate.pdf, page: 4}
+  kind: fact
+  notes: "The same 5% / 15-day late fee also appears on every sample Closing Disclosure page 5; only the LE page is cited."
+
+- id: le-balloon-final-payment
+  question: For the seven-year balloon loan, how much will I owe in one lump sum at the end?
+  reference_answer: About $149,263 ($149,262.95), due at the end of year 7.
+  evidence:
+    - {filename: cfpb_loan_estimate_h24e_balloon.pdf, page: 2}
+  kind: fact
+  notes: ""
+
+- id: le-negam-max-balance
+  question: With the negative amortization loan, how large could my loan balance get?
+  reference_answer: It can go as high as $176,032, and it can keep increasing until year 6.
+  evidence:
+    - {filename: cfpb_loan_estimate_h24f_negative_amortization.pdf, page: 2}
+  kind: fact
+  notes: ""
+
+- id: le-io-arm-max-rate
+  question: On the interest-only adjustable loan, what is the highest my interest rate could ever go?
+  reference_answer: 12%, which it can reach in year 15.
+  evidence:
+    - {filename: cfpb_loan_estimate_h24c_interest_only_arm.pdf, page: 2}
+  kind: fact
+  notes: "The AIR table on page 3 also lists the 12% maximum; page 2 is cited as the primary statement."
+
+- id: toolkit-credit-shopping-window
+  question: How long do I have to shop around with different mortgage lenders without really hurting my credit score?
+  reference_answer: Generally between 14 and 45 days, depending on the scoring model.
+  evidence:
+    - {filename: cfpb_home_loan_toolkit.pdf, page: 7}
+  kind: fact
+  notes: ""
+
+- id: toolkit-housing-payment-rule-of-thumb
+  question: What share of my income should my total monthly home payment be, as a rule of thumb?
+  reference_answer: At or below 28% of total monthly income before taxes.
+  evidence:
+    - {filename: cfpb_home_loan_toolkit.pdf, page: 6}
+  kind: fact
+  notes: ""
+
+- id: toolkit-cd-timing
+  question: How long before my closing should I receive my Closing Disclosure?
+  reference_answer: At least three (business) days before closing.
+  evidence:
+    - {filename: cfpb_home_loan_toolkit.pdf, page: 20}
+  kind: fact
+  notes: "Also stated on the scanned checklist page 2 ('three business days before closing'). Only the toolkit page is cited; a retriever surfacing only the checklist page scores a miss. Owner may want to add the checklist page as alternate evidence."
+
+- id: toolkit-shoppable-services-increase
+  question: Can the fees for services I picked myself go up between the Loan Estimate and closing?
+  reference_answer: They might increase at closing, but generally by no more than 10% of the costs listed on the final Loan Estimate.
+  evidence:
+    - {filename: cfpb_home_loan_toolkit.pdf, page: 20}
+  kind: fact
+  notes: "Paraphrases the toolkit's simplified statement; the real tolerance rules are more nuanced."
+
+- id: guide-refinance-cancel-window
+  question: I'm refinancing. If I change my mind after signing, how long do I have to back out?
+  reference_answer: Three business days; in some circumstances up to three years if information on the Closing Disclosure is missing or wrong. Notice must be given to the lender in writing.
+  evidence:
+    - {filename: cfpb_closing_forms_guide.pdf, page: 5}
+  kind: fact
+  notes: "Toolkit page 27 also mentions rescinding a refinance or HELOC within three days; not cited."
+
+- id: guide-acceleration
+  question: What can my lender do if I stop making my mortgage payments, according to the acceleration section?
+  reference_answer: The lender can declare the loan in default and demand the entire loan be paid off immediately; if you can't pay, it can start foreclosure.
+  evidence:
+    - {filename: cfpb_closing_forms_guide.pdf, page: 3}
+  kind: fact
+  notes: ""
+
+- id: checklist-what-to-bring
+  question: What should I bring with me on closing day?
+  reference_answer: A cashier's check or proof of wire transfer for the exact amount, the list of people to call, your Closing Disclosure, optionally a trusted friend/advisor/lawyer, your co-borrower or co-signer, your checkbook, and your driver's license or ID.
+  evidence:
+    - {filename: cfpb_mortgage_closing_checklist_scanned.pdf, page: 4}
+  kind: fact
+  notes: "Scanned (OCR) page. Answer read from the rendered image."
+
+- id: checklist-opt-out-offers
+  question: After buying my house, how can I stop getting credit card and home equity line offers in the mail?
+  reference_answer: Opt out online or by calling (888) 567-8688.
+  evidence:
+    - {filename: cfpb_mortgage_closing_checklist_scanned.pdf, page: 6}
+  kind: fact
+  notes: "Scanned (OCR) page; depends on OCR reading the phone number correctly."
+
+- id: checklist-wire-scam
+  question: What should I do if I get an email right before closing telling me to send my money to a different account?
+  reference_answer: Treat it as a possible scam and confirm the payment details with the trusted parties you recorded, using only the primary phone numbers you saved.
+  evidence:
+    - {filename: cfpb_mortgage_closing_checklist_scanned.pdf, page: 3}
+  kind: fact
+  notes: "Scanned (OCR) page."
+
+- id: cd-second-lien-funds
+  question: In the second-lien sample, how much money did the borrower bring in from the second loan?
+  reference_answer: $96,500.00, from a second loan with a $100,000 principal balance.
+  evidence:
+    - {filename: cfpb_closing_disclosure_h25c_second_lien.pdf, page: 2}
+  kind: fact
+  notes: ""
+
+- id: cd-junior-lien-satisfaction
+  question: In the sample where the borrower paid off the seller's second lien outside of closing, how much was it?
+  reference_answer: $5,000, paid outside of closing (P.O.C.) by the borrower.
+  evidence:
+    - {filename: cfpb_closing_disclosure_h25d1_refinance.pdf, page: 2}
+  kind: fact
+  notes: "File is named '_refinance' but the form (H-25(D)) is a purchase-transaction sample about satisfying the seller's junior lien; the question avoids calling it a refinance."
+
+# --- table --------------------------------------------------------------------
+
+- id: cd-fixed-origination-breakdown
+  question: What made up the lender's origination charges on the fixed-rate Closing Disclosure?
+  reference_answer: $1,802 total, made up of 0.25% points ($405), an application fee ($300), and an underwriting fee ($1,097).
+  evidence:
+    - {filename: cfpb_closing_disclosure_h25b.pdf, page: 3}
+  kind: table
+  notes: ""
+
+- id: le-fixed-shoppable-services
+  question: On the fixed-rate Loan Estimate, how much were the services I can shop for, and which one was the most expensive?
+  reference_answer: $3,198 in total; the most expensive item was the title search at $1,261.
+  evidence:
+    - {filename: cfpb_loan_estimate_h24b_fixed_rate.pdf, page: 3}
+  kind: table
+  notes: ""
+
+- id: cd-fixed-real-estate-commissions
+  question: How much real estate commission was paid in the fixed-rate home sale, and who paid it?
+  reference_answer: $5,700 to Alpha Real Estate Broker and $5,700 to Omega Real Estate Broker ($11,400 total), paid by the seller.
+  evidence:
+    - {filename: cfpb_closing_disclosure_h25b.pdf, page: 3}
+  kind: table
+  notes: "Seller-paid confirmed arithmetically: Seller-Paid at Closing subtotal $12,800 = transfer tax $950 + home warranty $450 + commissions $11,400, and borrower-paid Section H is only $2,400. The Docling table for this row is garbled (amounts drift into other columns), so this is a hard table question."
+
+- id: le-io-arm-rate-adjustments
+  question: How does the rate on the interest-only ARM change over time?
+  reference_answer: It is MTA index + 4% margin, starting at 4%; first change at the beginning of the 61st month, then every 36 months; each change is capped at 2%; the rate stays between 3.25% and 12%.
+  evidence:
+    - {filename: cfpb_loan_estimate_h24c_interest_only_arm.pdf, page: 3}
+  kind: table
+  notes: ""
+
+- id: le-fixed-projected-payments
+  question: For the fixed-rate loan, how much will my total monthly payment be at first, and how much after year 7?
+  reference_answer: About $1,050 a month in years 1-7, dropping to about $968 in years 8-30 once mortgage insurance ends.
+  evidence:
+    - {filename: cfpb_loan_estimate_h24b_fixed_rate.pdf, page: 2}
+  kind: table
+  notes: "The matching CD (h25b page 2) has the same table with cents ($1,050.26 / $967.91); only the LE is cited."
+
+- id: cd-cash-out-refi-payoffs
+  question: In the refinance where the borrower had to bring cash to closing, what debts were paid off with the new loan?
+  reference_answer: Rho Servicing existing loan $124,000; Beta Card Inc. credit card $5,000; Bob's Home Improvement mechanic's lien $12,000; State of Anywhere tax lien $10,000 — $151,000 total.
+  evidence:
+    - {filename: cfpb_closing_disclosure_h25g.pdf, page: 4}
+  kind: table
+  notes: ""
+
+- id: cd-fixed-loan-calculations
+  question: Over the life of the fixed-rate loan, how much will I pay in total and how much of that is the cost of borrowing?
+  reference_answer: Total of payments $285,803.36; finance charge $118,830.27.
+  evidence:
+    - {filename: cfpb_closing_disclosure_h25b.pdf, page: 6}
+  kind: table
+  notes: ""
+
+- id: cd-fixed-prepaid-interest
+  question: How much prepaid interest did the fixed-rate borrowers pay at closing, and for what period?
+  reference_answer: $279.04, at $17.44 per day from 4/15/13 to 5/1/13.
+  evidence:
+    - {filename: cfpb_closing_disclosure_h25b.pdf, page: 3}
+  kind: table
+  notes: ""
+
+- id: le-io-arm-payment-range-later-years
+  question: What range could my monthly payment be on the interest-only ARM in years 12 through 30?
+  reference_answer: Between $1,028 and $2,068 a month.
+  evidence:
+    - {filename: cfpb_loan_estimate_h24c_interest_only_arm.pdf, page: 2}
+  kind: table
+  notes: ""
+
+- id: toolkit-points-tradeoff
+  question: In the toolkit's example, what do I get if I pay extra points to lower my rate?
+  reference_answer: Paying 0.375 points (about $675 more at closing) lowers the rate from 5.0% to 4.875% on the $180,000 30-year example loan.
+  evidence:
+    - {filename: cfpb_home_loan_toolkit.pdf, page: 10}
+  kind: table
+  notes: ""
+
+- id: cd-refi-initial-escrow
+  question: On the refinance Closing Disclosure, what went into the initial escrow deposit at closing?
+  reference_answer: $576.95 total, homeowner's insurance $201.66, mortgage insurance $164.70, property taxes $210.60, and a -$0.01 aggregate adjustment.
+  evidence:
+    - {filename: cfpb_closing_disclosure_h25e_balloon.pdf, page: 3}
+  kind: table
+  notes: "File cfpb_closing_disclosure_h25e_balloon.pdf is really H-25(E), the refinance CD matching LE H-24(D), despite its '_balloon' filename. H-25(G) page 3 has an identical escrow block ($576.95); a retriever returning that page instead scores a miss."
+
+# --- multi_hop ----------------------------------------------------------------
+
+- id: fixed-apr-le-vs-cd
+  question: For the fixed-rate loan, did the APR change between the Loan Estimate and the Closing Disclosure?
+  reference_answer: Yes, it went from 4.274% on the Loan Estimate to 4.174% on the Closing Disclosure (0.1 point lower).
+  evidence:
+    - {filename: cfpb_loan_estimate_h24b_fixed_rate.pdf, page: 4}
+    - {filename: cfpb_closing_disclosure_h25b.pdf, page: 6}
+  kind: multi_hop
+  notes: "Cross-document. The TIP moved too (69.45% -> 69.46%)."
+
+- id: fixed-title-search-le-vs-cd
+  question: How much did the title search end up costing compared to what the lender first estimated on the fixed-rate loan?
+  reference_answer: Estimated at $1,261 on the Loan Estimate; the final charge was $800.00, i.e. $461 less.
+  evidence:
+    - {filename: cfpb_loan_estimate_h24b_fixed_rate.pdf, page: 3}
+    - {filename: cfpb_closing_disclosure_h25b.pdf, page: 3}
+  kind: multi_hop
+  notes: "Cross-document."
+
+- id: fixed-prepaid-interest-le-vs-cd
+  question: Why did the prepaid interest on the fixed-rate loan come out higher at closing than on the estimate?
+  reference_answer: The estimate assumed 15 days at $17.44/day ($262); at closing it covered 4/15/13 to 5/1/13 (16 days), $279.04.
+  evidence:
+    - {filename: cfpb_loan_estimate_h24b_fixed_rate.pdf, page: 3}
+    - {filename: cfpb_closing_disclosure_h25b.pdf, page: 3}
+  kind: multi_hop
+  notes: "Cross-document. The 16-day count is inferred from the dates; the CD does not state it."
+
+- id: refi-loan-costs-le-vs-cd
+  question: For the refinance, how did the total loan costs on the Closing Disclosure compare with the Loan Estimate?
+  reference_answer: They went down slightly, from $3,521 on the Loan Estimate to $3,495.50 at closing.
+  evidence:
+    - {filename: cfpb_loan_estimate_h24d_refinance.pdf, page: 2}
+    - {filename: cfpb_closing_disclosure_h25e_balloon.pdf, page: 2}
+  kind: multi_hop
+  notes: "Cross-document. Pairs LE H-24(D) with CD H-25(E); the H-25(E) cover page says it illustrates the H-24(D) transaction. The CD file is misnamed '_balloon'. Loan amount, rate and P&I match ($150,000, 4.25%, $737.91)."
+
+- id: fixed-shoppable-within-tolerance
+  question: The toolkit says fees for services I shop for generally can't rise more than 10%. Did the fixed-rate loan's shoppable services stay within that?
+  reference_answer: Yes. They were estimated at $3,198 and came in at $2,655.50 on the Closing Disclosure, a decrease.
+  evidence:
+    - {filename: cfpb_home_loan_toolkit.pdf, page: 20}
+    - {filename: cfpb_loan_estimate_h24b_fixed_rate.pdf, page: 3}
+    - {filename: cfpb_closing_disclosure_h25b.pdf, page: 3}
+  kind: multi_hop
+  notes: "Cross-document (three docs). Simplifies the 10% tolerance rule to the toolkit's wording."
+
+- id: fixed-what-changed-checklist
+  question: The closing checklist tells me to compare my Closing Disclosure with my Loan Estimate using a table. For the fixed-rate sample, which amounts changed?
+  reference_answer: The table at the top of page 3 of the CD (physical page 4) shows changes in Total Closing Costs ($8,054 -> $9,712.10), Closing Costs Paid Before Closing ($0 -> $29.80), Seller Credits ($0 -> -$2,500), and Adjustments and Other Credits ($0 -> -$1,035.04); cash to close went from $16,054 to $14,147.26.
+  evidence:
+    - {filename: cfpb_mortgage_closing_checklist_scanned.pdf, page: 3}
+    - {filename: cfpb_closing_disclosure_h25b.pdf, page: 4}
+  kind: multi_hop
+  notes: "Cross-document; the checklist page is scanned (OCR)."
+
+- id: fixed-pmi-why
+  question: Why does the fixed-rate loan include mortgage insurance, and how much is it per month?
+  reference_answer: The borrowers put down $18,000 on a $180,000 home (10%), under the 20% threshold where lenders generally require mortgage insurance; it is $82 a month in years 1-7.
+  evidence:
+    - {filename: cfpb_home_loan_toolkit.pdf, page: 9}
+    - {filename: cfpb_loan_estimate_h24b_fixed_rate.pdf, page: 2}
+  kind: multi_hop
+  notes: "Cross-document. The 20% threshold is stated on toolkit pages 5 and 9; page 9 (down payment choices, PMI) is cited. The down payment is also on LE page 3 ($18,000); the sale price and loan amount on page 2 are enough."
+
+- id: io-arm-when-principal-starts
+  question: On the interest-only ARM, when do I start paying down principal, and what will my principal and interest payment be then?
+  reference_answer: Starting with the 61st payment (year 6), principal and interest will be between $1,028 and $1,359 a month, up from $703.33 interest-only.
+  evidence:
+    - {filename: cfpb_loan_estimate_h24c_interest_only_arm.pdf, page: 2}
+    - {filename: cfpb_loan_estimate_h24c_interest_only_arm.pdf, page: 3}
+  kind: multi_hop
+  notes: "Same document, two pages. Page 2 alone gives the year-6 range; page 3 (AP table) gives the 61st payment."
+
+- id: fixed-escrow-year-one
+  question: For the fixed-rate loan, how much goes into escrow over the first year, and how does that match my monthly escrow payment?
+  reference_answer: $2,473.56 over year 1, which is 12 x the $206.13 monthly escrow payment (homeowner's insurance and property taxes).
+  evidence:
+    - {filename: cfpb_closing_disclosure_h25b.pdf, page: 2}
+    - {filename: cfpb_closing_disclosure_h25b.pdf, page: 5}
+  kind: multi_hop
+  notes: "Same document. Page 5 also states the $206.13 monthly escrow payment, so page 5 alone can answer it."
+
+- id: cash-out-refi-why-bring-cash
+  question: In the refinance where the borrower had to bring money to closing, why was the new loan not enough, and how much cash was needed?
+  reference_answer: The $150,000 loan did not cover the $151,000 in payoffs plus closing costs, so the borrower had to bring $6,716.60 to closing.
+  evidence:
+    - {filename: cfpb_closing_disclosure_h25g.pdf, page: 2}
+    - {filename: cfpb_closing_disclosure_h25g.pdf, page: 4}
+  kind: multi_hop
+  notes: "Same document. Page 4 alone has loan amount, payoffs and cash to close, so page 2 is corroborating."
+
+# --- unanswerable -------------------------------------------------------------
+
+- id: unans-borrower-credit-score
+  question: What credit score did Michael Jones and Mary Stone have when they applied for the fixed-rate loan?
+  reference_answer: The documents do not say.
+  evidence: []
+  kind: unanswerable
+  notes: "The toolkit discusses credit scores in general; no borrower score is given anywhere."
+
+- id: unans-borrower-income
+  question: What is the borrowers' annual household income on the fixed-rate loan?
+  reference_answer: The documents do not say.
+  evidence: []
+  kind: unanswerable
+  notes: ""
+
+- id: unans-home-square-footage
+  question: How many bedrooms or square feet does the house at 456 Somewhere Avenue have?
+  reference_answer: The documents do not say.
+  evidence: []
+  kind: unanswerable
+  notes: ""
+
+- id: unans-property-tax-rate
+  question: What is the property tax rate in Any County USA for the fixed-rate home?
+  reference_answer: The documents do not say. They give only dollar amounts ($105.30 a month, $631.80 for 6 months), not a rate.
+  evidence: []
+  kind: unanswerable
+  notes: "A model could try to back out a rate from the $180,000 sale price; that would be a guess, not a stated rate."
+
+- id: unans-insurer-phone
+  question: What is the phone number of the homeowner's insurance company for the fixed-rate purchase?
+  reference_answer: The documents do not say. The contact table lists only the lender, mortgage broker, real estate brokers, and settlement agent.
+  evidence: []
+  kind: unanswerable
+  notes: ""

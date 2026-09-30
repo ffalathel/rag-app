@@ -11,8 +11,11 @@ from docuchat.config import Settings
 from docuchat.evaluate import (
     CORPUS_DIR,
     INGEST_FIELDS,
+    NODES_DIR,
+    QUESTIONS_PATH,
     StaleSnapshotError,
     corpus_hashes,
+    load_questions,
     load_snapshot,
     unreachable_evidence,
     validate_questions,
@@ -206,3 +209,26 @@ def test_sources_md_matches_corpus():
         assert row["sha256"] == actual_hashes[row["file"]], row["file"]
 
     assert any(row["scanned"].lower().startswith("yes") for row in rows)
+
+
+# --- Real ground truth and snapshots -----------------------------------------
+
+TARGET_MIX = {"fact": 15, "table": 10, "multi_hop": 10, "unanswerable": 5}
+
+
+def test_questions_yaml_is_valid():
+    assert validate_questions(load_questions(QUESTIONS_PATH), CORPUS_DIR) == []
+
+
+def test_question_mix():
+    questions = load_questions(QUESTIONS_PATH)
+    assert len(questions) >= 35
+    for kind, target in TARGET_MIX.items():
+        count = sum(q["kind"] == kind for q in questions)
+        assert abs(count - target) <= 3, (kind, count)
+
+
+def test_all_evidence_reachable():
+    questions = load_questions(QUESTIONS_PATH)
+    nodes = load_snapshot(NODES_DIR / "mortgage.jsonl", CORPUS_DIR, Settings())
+    assert unreachable_evidence(questions, nodes) == []
