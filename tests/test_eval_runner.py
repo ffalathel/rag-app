@@ -260,6 +260,9 @@ def test_ragas_scores_on_two_records():
 
     assert 0.0 <= scores["ragas_faithfulness"] <= 1.0
     assert 0.0 <= scores["ragas_answer_relevancy"] <= 1.0
+    for r in records:  # per-question scores, so summary CIs reflect real variance
+        assert 0.0 <= r["ragas_faithfulness"] <= 1.0
+        assert 0.0 <= r["ragas_answer_relevancy"] <= 1.0
 
 
 def test_render_summary_shows_ragas_columns_when_records_carry_them():

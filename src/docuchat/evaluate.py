@@ -458,7 +458,9 @@ def run_arm(
 def ragas_scores(records: list[dict], cfg: Settings) -> dict[str, float]:
     """Mean RAGAS faithfulness and answer-relevancy over `records` (each
     needs "question", "answer", "contexts"; records with "error" are
-    skipped).
+    skipped). Also writes each scored record's own `ragas_faithfulness` /
+    `ragas_answer_relevancy` so aggregate() bootstraps over real
+    per-question values.
 
     Uses ragas 0.4.3's `ragas.evaluate` with the `ragas.metrics.faithfulness`
     and `ragas.metrics.answer_relevancy` metric objects,
@@ -507,6 +509,10 @@ def ragas_scores(records: list[dict], cfg: Settings) -> dict[str, float]:
         embeddings=embeddings,
         show_progress=False,
     )
+    scored = [r for r in records if "error" not in r]
+    for r, faith, rel in zip(scored, result["faithfulness"], result["answer_relevancy"]):
+        r["ragas_faithfulness"] = float(faith)
+        r["ragas_answer_relevancy"] = float(rel)
     return {
         "ragas_faithfulness": float(np.nanmean(result["faithfulness"])),
         "ragas_answer_relevancy": float(np.nanmean(result["answer_relevancy"])),
@@ -741,10 +747,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
         arm_ragas = None
         if args.ragas:
-            arm_ragas = ragas_scores(records, cfg)
-            for r in records:
-                if "error" not in r:
-                    r.update(arm_ragas)
+            arm_ragas = ragas_scores(records, cfg)  # also sets per-record scores
 
         with open(RESULTS_DIR / f"{name.replace('/', '_')}.json", "w") as f:
             json.dump({"records": records, "ragas": arm_ragas}, f, indent=2)
