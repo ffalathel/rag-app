@@ -7,15 +7,23 @@ def test_defaults_match_notebook_constants():
     cfg = Settings()
     assert cfg.chunk_max_tokens == 512
     assert cfg.merge_threshold == 0.75
-    assert cfg.dedup_threshold == 0.92
-    assert cfg.max_context_tokens == 2000
     assert cfg.rrf_k == 60
-    assert cfg.top_k == 10
-    assert cfg.rerank_top_n == 5
     assert cfg.min_rerank_score is None
     assert cfg.cross_encoder_name == "BAAI/bge-reranker-v2-m3"
     assert cfg.cross_encoder_max_length == 1024
     assert cfg.max_new_tokens == 1024
+
+
+def test_retrieval_defaults_tuned_past_notebook_for_recall():
+    """top_k/rerank_top_n/dedup_threshold/max_context_tokens were widened past
+    the notebook's originals (10/5/0.92/2000) after eval showed the notebook's
+    values capped +rerank recall at ~51% on the eval corpus; the wider window
+    reaches ~71%. See docs/superpowers/plans/2026-09-28-docuchat-evaluation.md."""
+    cfg = Settings()
+    assert cfg.top_k == 30
+    assert cfg.rerank_top_n == 15
+    assert cfg.dedup_threshold == 0.97
+    assert cfg.max_context_tokens == 4000
 
 
 def test_from_env_casts_by_field_type(monkeypatch):
