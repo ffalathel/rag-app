@@ -12,13 +12,29 @@ Settings fields that model depends on, so changing an unrelated field (e.g.
 use_rerank between ablation arms) reuses the loaded model.
 """
 
+import functools
 import os
+import threading
 from functools import lru_cache
 
 from docuchat.config import Settings
 
 # used when Settings.llm_model is left empty; llamacpp takes gguf_path instead
 _DEFAULT_MODELS = {"anthropic": "claude-sonnet-5", "gemini": "gemini-3.7-flash"}
+
+# Local models on Apple's MPS backend segfault under concurrent inference
+# (the eval runner and Streamlit both call from several threads), so every
+# load and forward pass of a local model goes through this one lock.
+_LOCAL_MODEL_LOCK = threading.RLock()
+
+
+def _serialized(method):
+    @functools.wraps(method)
+    def wrapper(*args, **kwargs):
+        with _LOCAL_MODEL_LOCK:
+            return method(*args, **kwargs)
+
+    return wrapper
 
 
 @lru_cache(maxsize=1)
@@ -110,7 +126,11 @@ def get_judge_llm(cfg: Settings):
 def _load_embed_model(embed_model_name):
     from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
-    return HuggingFaceEmbedding(model_name=embed_model_name)
+    with _LOCAL_MODEL_LOCK:
+        embed_model = HuggingFaceEmbedding(model_name=embed_model_name)
+    st = _sentence_transformer_of(embed_model)
+    st.encode = _serialized(st.encode)  # covers get_encoder() too: same object
+    return embed_model
 
 
 def get_embed_model(cfg: Settings):
@@ -155,7 +175,10 @@ def get_encoder(cfg: Settings):
 def _load_cross_encoder(cross_encoder_name, cross_encoder_max_length):
     from sentence_transformers import CrossEncoder
 
-    return CrossEncoder(cross_encoder_name, max_length=cross_encoder_max_length)
+    with _LOCAL_MODEL_LOCK:
+        cross_encoder = CrossEncoder(cross_encoder_name, max_length=cross_encoder_max_length)
+    cross_encoder.predict = _serialized(cross_encoder.predict)
+    return cross_encoder
 
 
 def get_cross_encoder(cfg: Settings):

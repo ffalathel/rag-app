@@ -108,7 +108,7 @@ def test_cross_encoder_and_encoder_ignore_unrelated_settings_changes(monkeypatch
 
     class FakeHuggingFaceEmbedding:
         def __init__(self, model_name):
-            self._model = object()
+            self._model = types.SimpleNamespace(encode=lambda *a, **k: None)
 
     fake_hf_module = types.ModuleType("llama_index.embeddings.huggingface")
     fake_hf_module.HuggingFaceEmbedding = FakeHuggingFaceEmbedding
@@ -117,6 +117,9 @@ def test_cross_encoder_and_encoder_ignore_unrelated_settings_changes(monkeypatch
     class FakeCrossEncoder:
         def __init__(self, name, max_length):
             self.name = name
+
+        def predict(self, pairs):
+            return [0.0] * len(pairs)
 
     fake_st_module = types.ModuleType("sentence_transformers")
     fake_st_module.CrossEncoder = FakeCrossEncoder
