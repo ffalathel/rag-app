@@ -9,6 +9,7 @@ import hmac
 import json
 import logging
 import os
+import re
 from contextlib import asynccontextmanager, contextmanager
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
@@ -25,6 +26,20 @@ FORBIDDEN_PAGE = (
 )
 
 log = logging.getLogger("docuchat")
+
+
+class _RedactKey(logging.Filter):
+    """Keeps the access key out of uvicorn's access log (it logs the request line)."""
+
+    def filter(self, record):
+        if isinstance(record.args, tuple):
+            record.args = tuple(
+                re.sub(r'(key=)[^&\s"]+', r"\1[redacted]", a) if isinstance(a, str) else a
+                for a in record.args)
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(_RedactKey())
 
 
 class AskRequest(BaseModel):
@@ -64,10 +79,12 @@ def create_app(service: Service, access_key: str | None) -> FastAPI:
                 # Relative Location: behind HF's TLS proxy request.url says http://.
                 url = request.url.remove_query_params("key")
                 response = RedirectResponse(
-                    url.path + (f"?{url.query}" if url.query else ""), status_code=303)
+                    "/" + url.path.lstrip("/") + (f"?{url.query}" if url.query else ""), status_code=303)
             else:
                 # A 303 would turn a POST into a GET and drop its body.
                 response = await call_next(request)
+            # ponytail: the cookie holds the shared access key itself; no per-visitor
+            # revocation short of rotating the key. Upgrade: a signed random session token.
             response.set_cookie(COOKIE, access_key, max_age=COOKIE_MAX_AGE,
                                 httponly=True, secure=True, samesite="lax")
             return response

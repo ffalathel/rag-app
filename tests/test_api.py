@@ -32,7 +32,9 @@ def test_no_key_is_forbidden(client):
 
 
 def test_wrong_key_or_cookie_is_forbidden(client):
-    assert client.get("/?key=nope", follow_redirects=False).status_code == 403
+    response = client.get("/?key=nope", follow_redirects=False)
+    assert response.status_code == 403
+    assert "nope" not in response.text
     client.cookies.set(COOKIE, "nope")
     assert client.post("/api/sessions").status_code == 403
 
@@ -42,6 +44,7 @@ def test_key_link_sets_cookie_and_redirects_relative_without_the_key(client):
     response = client.get("/?key=secret&x=1", follow_redirects=False)
     assert response.status_code == 303
     assert response.headers["location"] == "/?x=1"
+    assert "secret" not in response.headers["location"]
     set_cookie = response.headers["set-cookie"]
     assert f"{COOKIE}=secret" in set_cookie
     assert "HttpOnly" in set_cookie and "Secure" in set_cookie
@@ -109,3 +112,20 @@ def test_upload_rejection_maps_to_its_status(authed, fake_service):
 def test_reset(authed, fake_service):
     assert authed.post("/api/sessions/s1/reset").json() == {"ok": True}
     assert fake_service.resets == ["s1"]
+
+
+def test_redirect_is_never_protocol_relative(client):
+    response = client.get("///evil.example/?key=secret", follow_redirects=False)
+    assert response.headers["location"] == "/evil.example/"
+
+
+def test_access_log_redacts_the_key():
+    import logging
+
+    record = logging.LogRecord(
+        "uvicorn.access", logging.INFO, "", 0, '%s - "%s %s HTTP/%s" %d',
+        ("127.0.0.1:1", "GET", "/?key=secret&x=1", "1.1", 303), None)
+    for f in logging.getLogger("uvicorn.access").filters:
+        f.filter(record)
+    assert "secret" not in record.getMessage()
+    assert "x=1" in record.getMessage()
