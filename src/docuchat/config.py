@@ -94,6 +94,13 @@ class Settings:
     # Evaluation
     judge_model: str = "claude-opus-5-5"
 
+    # Service
+    session_ttl_minutes: int = 30
+    max_upload_mb: int = 10
+    max_upload_pages: int = 30
+    daily_query_cap: int = 200
+    daily_upload_cap: int = 20
+
     def __post_init__(self) -> None:
         if self.retrieval_mode not in _RETRIEVAL_MODES:
             raise ValueError(

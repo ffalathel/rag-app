@@ -83,3 +83,14 @@ def test_judge_model_default(monkeypatch):
     assert Settings().judge_model == "claude-opus-5-5"
     monkeypatch.setenv("DOCUCHAT_JUDGE_MODEL", "claude-haiku-5")
     assert Settings.from_env().judge_model == "claude-haiku-5"
+
+
+def test_service_defaults():
+    cfg = Settings()
+    assert (cfg.session_ttl_minutes, cfg.max_upload_mb, cfg.max_upload_pages) == (30, 10, 30)
+    assert (cfg.daily_query_cap, cfg.daily_upload_cap) == (200, 20)
+
+
+def test_service_caps_override_from_env(monkeypatch):
+    monkeypatch.setenv("DOCUCHAT_DAILY_QUERY_CAP", "5")
+    assert Settings.from_env().daily_query_cap == 5
