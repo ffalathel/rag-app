@@ -6,14 +6,18 @@ pipeline logic and the REST tests exercise the same path the UI uses.
 """
 
 import datetime
+import tempfile
 import threading
 import time
 import uuid
 from dataclasses import dataclass
+from pathlib import Path
 
+from docuchat.classify import classify_pages
 from docuchat.config import Settings
 from docuchat.evaluate import CORPUS_DIR, NODES_DIR, arm_settings, load_snapshot
-from docuchat.index import store_from_nodes
+from docuchat.index import Store, build_store, store_from_nodes
+from docuchat.ingest import load_directory
 from docuchat.models import get_llm
 from docuchat.pipeline import ask
 
@@ -74,6 +78,52 @@ class _LazyLLM:
             raise LLMError() from exc
 
 
+def check_upload(files: list[tuple[str, bytes]], cfg: Settings) -> None:
+    """Reject an upload before Docling sees it: cheapest checks first."""
+    import pypdfium2
+
+    if not files:
+        raise UploadRejected("Upload at least one PDF.", status=422)
+    if sum(len(data) for _, data in files) > cfg.max_upload_mb * 1024 * 1024:
+        raise UploadRejected(f"Uploads are limited to {cfg.max_upload_mb} MB in total.", status=413)
+    pages = 0
+    for name, data in files:
+        if not data.startswith(b"%PDF"):
+            raise UploadRejected(f"{name} is not a PDF. PDF files only.", status=415)
+        try:
+            pdf = pypdfium2.PdfDocument(data)
+        except pypdfium2.PdfiumError as exc:
+            raise UploadRejected(f"{name} could not be read as a PDF.", status=415) from exc
+        pages += len(pdf)
+        pdf.close()
+    if pages > cfg.max_upload_pages:
+        raise UploadRejected(
+            f"Uploads are limited to {cfg.max_upload_pages} pages in total.", status=413)
+
+
+def safe_name(name: str, index: int, taken: set[str]) -> str:
+    """A filename safe to write into the temp dir: no path components, a .pdf
+    suffix (load_directory only globs *.pdf), and unique within the upload."""
+    base = Path(name).name or f"upload_{index}.pdf"
+    if not base.lower().endswith(".pdf"):
+        base += ".pdf"
+    return base if base not in taken else f"{index}_{base}"
+
+
+def build_upload_store(files: list[tuple[str, bytes]], llm, cfg: Settings) -> Store:
+    """Docling -> classify -> chunk -> index, for one session's upload."""
+    with tempfile.TemporaryDirectory() as tmp:
+        taken: set[str] = set()
+        for i, (name, data) in enumerate(files):
+            filename = safe_name(name, i, taken)
+            taken.add(filename)
+            (Path(tmp) / filename).write_bytes(data)
+        pages = load_directory(tmp, cfg)
+    if not pages:
+        raise UploadRejected("No readable text found in the upload.", status=422)
+    return build_store(classify_pages(pages, llm, cfg), cfg)
+
+
 @dataclass
 class _Session:
     store: object = None  # None means the shared sample store
@@ -83,12 +133,15 @@ class _Session:
 
 class Service:
     def __init__(self, cfg: Settings, sample_store=None, *, clock=time.time,
-                 llm_factory=get_llm, ask_fn=ask):
+                 llm_factory=get_llm, ask_fn=ask,
+                 build_upload_store_fn=build_upload_store):
         self.cfg = cfg
         self.sample_store = sample_store
         self._clock = clock
         self._llm_factory = llm_factory
         self._ask = ask_fn
+        self._build_upload_store = build_upload_store_fn
+        self._ingest_slot = threading.Semaphore(1)
         self._sessions: dict[str, _Session] = {}
         self._day = None
         self._counts = {"query": 0, "upload": 0}
@@ -155,3 +208,19 @@ class Service:
     def reset(self, session_id: str) -> None:
         with self._lock:
             self._touch(session_id).store = None
+
+    def ingest_upload(self, session_id: str, files: list[tuple[str, bytes]]) -> int:
+        """Replace the session's documents with `files`. Returns the chunk count.
+        On any failure the session keeps the store it had."""
+        check_upload(files, self.cfg)
+        with self._lock:
+            self._touch(session_id)
+            self._spend("upload")
+        # ponytail: one ingestion at a time on 2 vCPU; a queue with progress if visitors wait too long
+        with self._ingest_slot:
+            store = self._build_upload_store(files, _LazyLLM(self.cfg, self._llm_factory), self.cfg)
+        with self._lock:
+            session = self._touch(session_id)
+            session.store = store
+            session.expired = False
+        return len(store.nodes)

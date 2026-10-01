@@ -1,6 +1,7 @@
 """Tests for docuchat.service: sessions, TTL, quota, and LLM error mapping."""
 
 import datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -8,6 +9,7 @@ import pytest
 from docuchat.config import Settings
 from docuchat.service import (
     LLMError, LLMNotConfigured, QuotaExceeded, Service, ServiceError,
+    UploadRejected,
 )
 
 NOON = datetime.datetime(2026, 10, 1, 12, tzinfo=datetime.timezone.utc).timestamp()
@@ -128,3 +130,85 @@ def test_new_session_ids_are_unique_and_unguessable(make_service):
     svc = make_service()
     ids = {svc.new_session() for _ in range(100)}
     assert len(ids) == 100 and all(len(i) == 32 for i in ids)
+
+
+PRIVATE = SimpleNamespace(name="PRIVATE", nodes=[1, 2, 3])
+FILES = [("a.pdf", b"%PDF")]
+
+
+@pytest.fixture
+def upload_service(clock, monkeypatch):
+    # check_upload is covered in test_upload_caps.py; skip real PDF parsing here
+    monkeypatch.setattr("docuchat.service.check_upload", lambda files, cfg: None)
+
+    def _make(build=lambda files, llm, cfg: PRIVATE, **overrides):
+        return Service(Settings(**overrides), sample_store=SAMPLE, clock=clock,
+                       ask_fn=fake_ask, build_upload_store_fn=build)
+    return _make
+
+
+def test_upload_switches_only_that_session_to_its_private_store(upload_service):
+    svc = upload_service()
+    assert svc.ingest_upload("s1", FILES) == 3
+    assert svc.answer("s1", "q")["answer"] == "PRIVATE"
+    assert svc.answer("s2", "q")["answer"] == "SAMPLE"
+
+
+def test_reset_returns_the_session_to_the_sample(upload_service):
+    svc = upload_service()
+    svc.ingest_upload("s1", FILES)
+    svc.reset("s1")
+    assert svc.answer("s1", "q")["answer"] == "SAMPLE"
+
+
+def test_idle_session_expires_and_reports_it_once(upload_service, clock):
+    svc = upload_service(session_ttl_minutes=30)
+    svc.ingest_upload("s1", FILES)
+    clock.t += 31 * 60
+    first = svc.answer("s1", "q")
+    assert (first["answer"], first["expired"]) == ("SAMPLE", True)
+    assert svc.answer("s1", "q")["expired"] is False
+
+
+def test_activity_keeps_a_session_alive(upload_service, clock):
+    svc = upload_service(session_ttl_minutes=30)
+    svc.ingest_upload("s1", FILES)
+    for _ in range(3):
+        clock.t += 29 * 60
+        assert svc.answer("s1", "q")["answer"] == "PRIVATE"
+
+
+def test_failed_ingestion_keeps_the_previous_store(upload_service):
+    calls = []
+
+    def build(files, llm, cfg):
+        calls.append(files)
+        if len(calls) == 2:
+            raise RuntimeError("docling blew up")
+        return PRIVATE
+
+    svc = upload_service(build=build)
+    svc.ingest_upload("s1", FILES)
+    with pytest.raises(RuntimeError):
+        svc.ingest_upload("s1", FILES)
+    assert svc.answer("s1", "q")["answer"] == "PRIVATE"
+
+
+def test_upload_cap(upload_service):
+    svc = upload_service(daily_upload_cap=1)
+    svc.ingest_upload("s1", FILES)
+    with pytest.raises(QuotaExceeded):
+        svc.ingest_upload("s1", FILES)
+
+
+def test_rejected_upload_never_reaches_ingestion_or_quota(clock):
+    def must_not_run(files, llm, cfg):
+        raise AssertionError("ingestion must not run for a rejected upload")
+
+    svc = Service(Settings(daily_upload_cap=1), sample_store=SAMPLE, clock=clock,
+                  ask_fn=fake_ask, build_upload_store_fn=must_not_run)
+    with pytest.raises(UploadRejected):
+        svc.ingest_upload("s1", [("notes.txt", b"hello")])
+    svc._build_upload_store = lambda files, llm, cfg: PRIVATE
+    pdf_bytes = (Path(__file__).parent / "fixtures" / "cfpb_closing_disclosure.pdf").read_bytes()
+    svc.ingest_upload("s1", [("cd.pdf", pdf_bytes)])  # the one allowed upload is unspent
