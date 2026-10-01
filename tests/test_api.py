@@ -135,3 +135,8 @@ def test_ui_is_served_behind_the_gate(client, authed):
     assert authed.get("/").status_code == 200
     client.cookies.clear()
     assert client.get("/").status_code == 403
+
+
+def test_gradio_upload_and_queue_are_gated(client):
+    assert client.post("/gradio_api/upload", files={"files": ("a.pdf", b"x")}).status_code == 403
+    assert client.get("/gradio_api/queue/data").status_code == 403

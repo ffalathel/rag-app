@@ -3,6 +3,9 @@ name: deploy
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -23,6 +26,8 @@ jobs:
       - name: Upload to the Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE: ${{ vars.HF_SPACE }}
+          SHA: ${{ github.sha }}
         run: >
-          hf upload "${{ vars.HF_SPACE }}" _space . --repo-type space
-          --delete "*" --commit-message "deploy ${{ github.sha }}"
+          hf upload "$HF_SPACE" _space . --repo-type space
+          --delete "*" --commit-message "deploy $SHA"

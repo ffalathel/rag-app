@@ -97,6 +97,7 @@ class Settings:
     # Service
     session_ttl_minutes: int = 30
     max_upload_mb: int = 10
+    max_query_chars: int = 1000
     max_upload_pages: int = 30
     daily_query_cap: int = 200
     daily_upload_cap: int = 20

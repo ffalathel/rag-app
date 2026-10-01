@@ -88,6 +88,7 @@ def test_judge_model_default(monkeypatch):
 def test_service_defaults():
     cfg = Settings()
     assert (cfg.session_ttl_minutes, cfg.max_upload_mb, cfg.max_upload_pages) == (30, 10, 30)
+    assert cfg.max_query_chars == 1000
     assert (cfg.daily_query_cap, cfg.daily_upload_cap) == (200, 20)
 
 

@@ -21,3 +21,12 @@ def test_answer_lists_sources():
 def test_expired_session_is_announced():
     text = format_answer({"answer": "x", "sources": [], "expired": True})
     assert "session expired" in text.lower()
+
+
+def test_session_id_never_collapses_missing_hashes():
+    from types import SimpleNamespace
+    from docuchat.ui import _session_id
+
+    assert _session_id(SimpleNamespace(session_hash="abc")) == "abc"
+    a, b = (_session_id(SimpleNamespace(session_hash=None)) for _ in range(2))
+    assert a and b and a != b

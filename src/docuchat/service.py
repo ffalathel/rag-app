@@ -170,12 +170,16 @@ class Service:
         Caller holds self._lock."""
         now = self._clock()
         ttl = self.cfg.session_ttl_minutes * 60
-        for session in self._sessions.values():
-            if session.store is not None and now - session.last_used > ttl:
+        for sid, session in list(self._sessions.items()):
+            if now - session.last_used <= ttl:
+                continue
+            if session.store is not None:
                 session.store = None
                 session.expired = True
-        # ponytail: session records (minus their stores) are never removed;
-        # a few bytes per visitor is fine at portfolio scale.
+            elif not session.expired:
+                del self._sessions[sid]
+        # ponytail: the sweep is O(sessions) under the global lock, and records
+        # with a pending expiry notice live until that session's next answer.
         session = self._sessions.setdefault(session_id, _Session())
         session.last_used = now
         return session
@@ -196,6 +200,8 @@ class Service:
     def answer(self, session_id: str, query: str) -> dict:
         if not query.strip():
             raise ServiceError("Ask a question first.", status=422)
+        if len(query) > self.cfg.max_query_chars:
+            raise ServiceError("Question is too long.", status=422)
         with self._lock:
             session = self._touch(session_id)
             self._spend("query")

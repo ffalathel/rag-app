@@ -212,3 +212,34 @@ def test_rejected_upload_never_reaches_ingestion_or_quota(clock):
     svc._build_upload_store = lambda files, llm, cfg: PRIVATE
     pdf_bytes = (Path(__file__).parent / "fixtures" / "cfpb_closing_disclosure.pdf").read_bytes()
     svc.ingest_upload("s1", [("cd.pdf", pdf_bytes)])  # the one allowed upload is unspent
+
+
+def test_overlong_question_is_422_and_spends_nothing(make_service):
+    def must_not_run(*a, **k):
+        raise AssertionError("ask() must not run for an over-long question")
+
+    svc = make_service(ask_fn=must_not_run, daily_query_cap=1)
+    with pytest.raises(ServiceError) as exc:
+        svc.answer("s", "x" * 1001)
+    assert exc.value.status == 422
+    assert str(exc.value) == "Question is too long."
+    svc._ask = fake_ask
+    svc.answer("s", "x" * 1000)  # the limit itself is allowed, quota untouched
+
+
+def test_touch_prunes_idle_storeless_sessions_but_keeps_pending_notices(make_service, clock):
+    svc = make_service(session_ttl_minutes=1)
+    for i in range(5):
+        svc.reset(f"r{i}")
+        svc.answer(f"a{i}", "q")
+    with svc._lock:
+        svc._touch("up").store = object()
+    clock.t += 61
+    with svc._lock:
+        svc._touch("other")  # sweep: "up" expires, storeless ones are pruned
+    assert set(svc._sessions) == {"up", "other"}
+    assert svc._sessions["up"].expired
+    clock.t += 61
+    with svc._lock:
+        svc._touch("other")
+    assert "up" in svc._sessions  # still waiting to report its expiry
