@@ -55,3 +55,16 @@ def test_safe_name_strips_paths_adds_suffix_and_dedupes():
     assert safe_name("scan", 1, set()) == "scan.pdf"
     assert safe_name("", 2, set()) == "upload_2.pdf"
     assert safe_name("x.pdf", 3, {"x.pdf"}) == "3_x.pdf"
+
+
+def test_safe_name_never_collides():
+    taken: set[str] = set()
+    for i, n in enumerate(["x.pdf", "x.pdf", "1_x.pdf"]):
+        taken.add(safe_name(n, i, taken))
+    assert len(taken) == 3
+
+
+def test_safe_name_strips_nul_and_truncates():
+    assert "\x00" not in safe_name("a\x00b.pdf", 0, set())
+    long = safe_name("a" * 300 + ".pdf", 0, set())
+    assert len(long) <= 110 and long.endswith(".pdf")

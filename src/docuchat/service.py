@@ -104,10 +104,14 @@ def check_upload(files: list[tuple[str, bytes]], cfg: Settings) -> None:
 def safe_name(name: str, index: int, taken: set[str]) -> str:
     """A filename safe to write into the temp dir: no path components, a .pdf
     suffix (load_directory only globs *.pdf), and unique within the upload."""
-    base = Path(name).name or f"upload_{index}.pdf"
+    base = Path(name.replace("\x00", "")).name or f"upload_{index}.pdf"
     if not base.lower().endswith(".pdf"):
         base += ".pdf"
-    return base if base not in taken else f"{index}_{base}"
+    base = base[:-4][:100] + base[-4:]  # keep well under the filesystem name limit
+    candidate = base
+    while candidate in taken:
+        candidate = f"{index}_{candidate}"
+    return candidate
 
 
 def build_upload_store(files: list[tuple[str, bytes]], llm, cfg: Settings) -> Store:
