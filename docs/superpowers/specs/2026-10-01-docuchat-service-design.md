@@ -151,10 +151,11 @@ tests.
 - **Quota.** In-memory query and upload counters, reset at UTC midnight. Over
   the cap, the service raises `QuotaExceeded`.
   `# ponytail: counters reset on restart; persist them if a restart ever becomes an abuse vector.`
-- **Upload caps, checked before Docling runs.** Each file must start with
-  `%PDF` (else `UnsupportedType`). Total size must be ≤ `max_upload_mb` and the
-  total page count ≤ `max_upload_pages` (else `UploadTooLarge`). The page count
-  uses pypdfium2, already a dependency.
+- **Upload caps, checked before Docling runs.** All rejections raise one
+  `UploadRejected(message, status=...)` (a `ServiceError` subclass). No files: 422. A file not starting with
+  `%PDF`, or one pypdfium2 cannot open: 415. Total size over `max_upload_mb`,
+  or total pages over `max_upload_pages`: 413. The page count uses pypdfium2,
+  already a dependency.
 - **Failure isolation.** If ingestion fails, the session keeps its previous
   store and the error message reaches the caller.
 
@@ -186,13 +187,15 @@ still bounds spend in that case.
 |---|---|---|
 | Malformed request | 422 | — |
 | `QuotaExceeded` | 429 | "Demo quota reached, back tomorrow." |
-| `UploadTooLarge` | 413 | the cap that was exceeded |
-| `UnsupportedType` | 415 | "PDF files only." |
+| `UploadRejected` | its `status` (413 / 415 / 422) | its message, e.g. the cap that was exceeded |
 | No LLM key configured (`get_llm()` raises) | 503 | "LLM not configured." |
 | LLM API call fails | 502 | "Model service error, try again." |
 
-Uploads also return 503 without a key, because page classification calls the
-LLM.
+Classification runs once per uploaded file, heuristic first, and calls the
+LLM only when the heuristic returns "Unknown". The service hands the pipeline a
+lazy LLM wrapper that resolves `get_llm()` on first use, so without a key an
+upload succeeds when the heuristic classifies every file, and returns 503 only
+when the LLM is actually needed.
 
 Each answered query logs one JSON line to stdout (session-free: timings,
 number of chunks, status), which lands in the HF Space logs.
@@ -263,7 +266,7 @@ loads torch, or touches the network. Tests reuse `tests/conftest.py`'s
 | `test_pipeline.py` (extended) | `debug["timings"]` holds exactly the stages that ran, for `+rerank` and `full`, including on the empty-retrieval return. |
 | `test_bench.py` | The percentile function (including n=1) and exclusion of the cold first request. |
 | `test_ui.py` | `build(fake_service)` returns a `gr.Blocks` without raising. |
-| `test_import_purity.py` | Unchanged. It already walks every module, so it covers the new ones. |
+| `test_import_purity.py` | Add `docuchat.service`, `docuchat.api`, `docuchat.ui` and `docuchat.bench` to its module list. |
 
 Not tested in CI: the Gradio layout beyond construction, the Docker build (too
 large for a runner; HF builds it on deploy), and the live benchmark.
@@ -283,18 +286,16 @@ enforces that.
 ## Blocked until API keys
 
 Everything above is built and tested without keys. Without a key, the app runs
-and serves the UI and gate, while `/api/ask` and uploads return 503 "LLM not
-configured." These steps wait for keys, the same way sub-project 2's Task 10 is
+and serves the UI and gate, while `/api/ask` (and uploads that need the LLM) return 503 "LLM not
+configured" whenever the LLM is needed. These steps wait for keys, the same way sub-project 2's Task 10 is
 blocked:
 
 1. Create the Space and set its secrets.
 2. First deploy via `deploy.yml`, and verify the gate and quota live.
 3. Run `bench.py` against the Space and commit `eval/results/latency.md`.
-4. **Open decision: classification cost on uploads.** With
-   `use_llm_classification=True`, the worst case is 20 uploads × 30 pages = 600
-   classification calls a day, on top of 200 queries. Decide at this step
-   whether to keep it, lower `max_upload_pages`, or classify uploads
-   heuristically.
+4. Confirm the daily caps against real spend. Classification costs at most
+   one LLM call per uploaded file, and only for files the heuristic can't
+   label, so queries dominate the bill.
 
 ---
 
