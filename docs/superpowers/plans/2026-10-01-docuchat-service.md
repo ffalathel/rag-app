@@ -1494,6 +1494,11 @@ jobs:
 
 Do not start this task until the owner has an LLM API key (Anthropic, or Gemini with `DOCUCHAT_LLM_PROVIDER=gemini`) and a Hugging Face account. Stop and ask the owner at each step marked **owner**.
 
+- [ ] **Step 0: Pre-deploy Dockerfile hygiene** (deferred from the Task 7 and final reviews). Rebuild and re-run the Task 7 Step 4 checks afterwards.
+  - Pin `torch` and `torchvision` in the Dockerfile to the pair the local build resolved: `docker run --rm docuchat pip list | grep -i torch`.
+  - Add `.env.*` and `**/.env` to `.dockerignore`.
+  - `rm /tmp/warm.pdf` in the same `RUN` as the warm step.
+
 - [ ] **Step 1 (owner): Create the Space.** On huggingface.co: New Space, SDK **Docker**, hardware **CPU basic** (free), visibility **public**. The access gate is the access control; a private Space would require visitors to have HF accounts. Add these Space **secrets**:
   - the LLM key (`ANTHROPIC_API_KEY`, or `GOOGLE_API_KEY`)
   - `DOCUCHAT_ACCESS_KEY`, generated with `python -c "import secrets; print(secrets.token_urlsafe(24))"`
@@ -1510,6 +1515,8 @@ Do not start this task until the owner has an LLM API key (Anthropic, or Gemini 
   - A sample question gets a cited answer.
   - Uploading `tests/fixtures/cfpb_closing_disclosure.pdf` makes answers cite `cfpb_closing_disclosure.pdf`.
   - **Isolation:** open the key link in a private window; it still answers from the sample documents.
+  - The portfolio link must be the direct `https://<space>.hf.space/?key=...` URL, not `huggingface.co/spaces/...`. The gate cookie is `SameSite=Lax`, so it is dropped inside HF's iframe.
+  - If the Space stays in "Starting", check whether HF's health probe hits `/`, which the gate answers with 403. Only `/api/health` is exempt.
 
 - [ ] **Step 5: Benchmark.** Run `.venv/bin/python -m docuchat.bench --url https://<space>.hf.space --key <KEY>`. It spends about 43 of the day's 200 queries. Commit `eval/results/latency.md`.
 
