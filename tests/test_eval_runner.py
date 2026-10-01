@@ -302,3 +302,11 @@ def test_judge_agreement_none_when_nothing_filled():
          "human": {"correctness": None, "faithful": None, "refused": None}},
     ]
     assert judge_agreement(items) is None
+
+
+def test_run_arm_concurrent_keeps_question_order(fake_store):
+    cfg = arm_settings("+rerank", Settings())
+    questions = [dict(QUESTIONS[0], id=f"q{i}") for i in range(8)]
+    records = run_arm("+rerank", questions, fake_store, cfg, StubLLM(), workers=4)
+    assert [r["id"] for r in records] == [f"q{i}" for i in range(8)]
+    assert not any("error" in r for r in records)

@@ -13,6 +13,7 @@ import random
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from pathlib import Path
 
@@ -404,6 +405,7 @@ def run_arm(
     cfg: Settings,
     llm,
     judge_llm=None,
+    workers: int = 1,
 ) -> list[dict]:
     """Run every question in `questions` through ask() under arm `cfg`,
     scoring retrieval (and, with `judge_llm`, correctness) per question.
@@ -412,9 +414,12 @@ def run_arm(
     `record["error"]` in place of every key after "question"; the next
     question still runs. A judge parsing/API failure does not raise --
     judge_answer already returns a judge_error verdict for that.
+
+    `workers` > 1 runs questions concurrently (the work is API-bound);
+    records keep question order either way.
     """
-    records = []
-    for q in questions:
+
+    def _one(q: dict) -> dict:
         record = {"id": q["id"], "kind": q["kind"], "question": q["question"]}
         try:
             counting_llm = _CountingLLM(llm)
@@ -448,8 +453,10 @@ def run_arm(
                 )
         except Exception as exc:  # noqa: BLE001 -- recorded, not raised, so the run continues
             record["error"] = str(exc)
-        records.append(record)
-    return records
+        return record
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        return list(pool.map(_one, questions))
 
 
 # --- RAGAS cross-check -------------------------------------------------------
@@ -742,7 +749,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         unreachable.update(unreachable_evidence(questions, nodes))
         store = store_from_nodes(nodes, cfg)
 
-        records = run_arm(name, questions, store, cfg, answer_llm, judge_llm=judge_llm)
+        records = run_arm(name, questions, store, cfg, answer_llm, judge_llm=judge_llm, workers=8)
         arm_records[name] = records
 
         arm_ragas = None
