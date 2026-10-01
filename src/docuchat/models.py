@@ -154,7 +154,8 @@ def _load_embed_model(embed_model_name):
 def get_embed_model(cfg: Settings):
     """Return the configured HuggingFaceEmbedding, cached only on
     embed_model_name."""
-    return _load_embed_model(cfg.embed_model_name)
+    with _LOCAL_MODEL_LOCK:  # lru_cache alone lets racing threads each load a copy
+        return _load_embed_model(cfg.embed_model_name)
 
 
 def _sentence_transformer_of(embed_model):
@@ -202,4 +203,5 @@ def _load_cross_encoder(cross_encoder_name, cross_encoder_max_length):
 def get_cross_encoder(cfg: Settings):
     """Return the configured CrossEncoder reranker, cached only on
     cross_encoder_name and cross_encoder_max_length."""
-    return _load_cross_encoder(cfg.cross_encoder_name, cfg.cross_encoder_max_length)
+    with _LOCAL_MODEL_LOCK:  # lru_cache alone lets racing threads each load a copy
+        return _load_cross_encoder(cfg.cross_encoder_name, cfg.cross_encoder_max_length)
