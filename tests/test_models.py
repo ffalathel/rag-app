@@ -7,6 +7,7 @@ from docuchat.config import Settings
 from docuchat.models import (
     _load_cross_encoder,
     _load_embed_model,
+    _load_judge_llm,
     _load_llm,
     _sentence_transformer_of,
     get_cross_encoder,
@@ -133,3 +134,26 @@ def test_cross_encoder_and_encoder_ignore_unrelated_settings_changes(monkeypatch
 
     assert get_encoder(cfg_rerank) is get_encoder(cfg_no_rerank)
     assert get_cross_encoder(cfg_rerank) is get_cross_encoder(cfg_no_rerank)
+
+
+def test_get_judge_llm_gemini_uses_google_key(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    cfg = Settings(judge_model="gemini-3.7-pro")
+    with pytest.raises(RuntimeError, match="GOOGLE_API_KEY"):
+        get_judge_llm(cfg)
+
+    class FakeGoogleGenAI:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+    fake = types.ModuleType("llama_index.llms.google_genai")
+    fake.GoogleGenAI = FakeGoogleGenAI
+    monkeypatch.setitem(sys.modules, "llama_index.llms.google_genai", fake)
+    monkeypatch.setenv("GOOGLE_API_KEY", "x")
+    _load_judge_llm.cache_clear()
+    judge = get_judge_llm(cfg)
+    assert isinstance(judge, FakeGoogleGenAI)
+    assert judge.kwargs["model"] == "gemini-3.7-pro"
+    _load_judge_llm.cache_clear()

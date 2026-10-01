@@ -106,20 +106,38 @@ def get_llm(cfg: Settings):
 
 
 @lru_cache(maxsize=1)
-def _load_judge_llm(judge_model, max_new_tokens):
+def _load_judge_llm(judge_model, max_new_tokens, context_window):
     """Separate cache from _load_llm so judging never evicts the answer LLM
     from _load_llm's maxsize=1 cache."""
+    if judge_model.startswith("gemini"):
+        from llama_index.llms.google_genai import GoogleGenAI
+
+        # see _load_llm: explicit limits avoid a metadata fetch; Gemini 3
+        # may reject an explicit temperature
+        return GoogleGenAI(
+            model=judge_model,
+            temperature=None if "gemini-3" in judge_model else 0.0,
+            max_tokens=max_new_tokens,
+            context_window=context_window,
+        )
+
     from llama_index.llms.anthropic import Anthropic
 
     return Anthropic(model=judge_model, temperature=0.0, max_tokens=max_new_tokens)
 
 
 def get_judge_llm(cfg: Settings):
-    """Return the configured judge LLM (Anthropic only), used to score
-    answers during evaluation. Always uses temperature 0.0."""
-    if not os.environ.get("ANTHROPIC_API_KEY"):
+    """Return the judge LLM used to score answers during evaluation: Gemini
+    when `judge_model` starts with "gemini", otherwise Anthropic. Temperature
+    0.0 where the model accepts one."""
+    if cfg.judge_model.startswith("gemini"):
+        if not (os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")):
+            raise RuntimeError(
+                "GOOGLE_API_KEY (or GEMINI_API_KEY) is not set; required for a gemini judge_model"
+            )
+    elif not os.environ.get("ANTHROPIC_API_KEY"):
         raise RuntimeError("ANTHROPIC_API_KEY is not set; required for get_judge_llm")
-    return _load_judge_llm(cfg.judge_model, cfg.max_new_tokens)
+    return _load_judge_llm(cfg.judge_model, cfg.max_new_tokens, cfg.context_window)
 
 
 @lru_cache(maxsize=1)
