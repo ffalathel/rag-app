@@ -12,10 +12,12 @@ import os
 import re
 from contextlib import asynccontextmanager, contextmanager
 
+import gradio as gr
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 
+from docuchat import ui
 from docuchat.service import Service, ServiceError
 
 COOKIE = "docuchat_key"
@@ -122,6 +124,9 @@ def create_app(service: Service, access_key: str | None) -> FastAPI:
         service.reset(session_id)
         return {"ok": True}
 
+    # Mounted last so the /api routes above take precedence over the UI at /.
+    gr.mount_gradio_app(app, ui.build(service), path="/",
+                        max_file_size=f"{service.cfg.max_upload_mb}mb")
     return app
 
 

@@ -1,5 +1,9 @@
 """Shared pytest fixtures."""
 
+import os
+
+os.environ.setdefault("GRADIO_ANALYTICS_ENABLED", "False")  # no network from the default suite
+
 import numpy as np
 import pytest
 from llama_index.core.schema import TextNode

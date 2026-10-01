@@ -129,3 +129,9 @@ def test_access_log_redacts_the_key():
         f.filter(record)
     assert "secret" not in record.getMessage()
     assert "x=1" in record.getMessage()
+
+
+def test_ui_is_served_behind_the_gate(client, authed):
+    assert authed.get("/").status_code == 200
+    client.cookies.clear()
+    assert client.get("/").status_code == 403
