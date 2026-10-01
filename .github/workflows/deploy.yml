@@ -1,0 +1,28 @@
+name: deploy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install huggingface_hub==1.33.0
+      - name: Stage exactly what the Docker build needs
+        run: |
+          mkdir -p _space/tests/fixtures _space/eval
+          cp Dockerfile .dockerignore pyproject.toml _space/
+          cp -r src _space/
+          cp -r eval/corpus eval/nodes eval/questions.yaml _space/eval/
+          cp tests/fixtures/cfpb_closing_disclosure.pdf _space/tests/fixtures/
+          cp deploy/space-README.md _space/README.md
+      - name: Upload to the Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: >
+          hf upload "${{ vars.HF_SPACE }}" _space . --repo-type space
+          --delete "*" --commit-message "deploy ${{ github.sha }}"
