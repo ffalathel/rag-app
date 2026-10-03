@@ -40,7 +40,7 @@ def test_sources_carry_citation_metadata(fake_llm, fake_store, fake_models):
 def test_debug_records_rewritten_query_and_sub_queries(fake_llm, fake_store, fake_models):
     result = ask("q", fake_store, Settings(), llm=fake_llm, **fake_models)
     assert set(result["debug"]) == {
-        "original_query", "rewritten_query", "sub_queries", "candidates", "contexts",
+        "original_query", "rewritten_query", "sub_queries", "candidates", "contexts", "timings",
     }
 
 
@@ -74,3 +74,23 @@ def test_prompt_preamble_comes_from_the_profile(make_node):
     assert "mortgage" in build_prompt("q", node, Settings()).lower()
     assert "mortgage" not in build_prompt(
         "q", node, Settings(domain_profile="generic")).lower()
+
+
+def test_timings_hold_exactly_the_stages_that_ran(fake_store, fake_llm, fake_models):
+    cfg = Settings(use_rewrite=False, use_decomposition=False, use_rerank=True)
+    timings = ask("q", fake_store, cfg, llm=fake_llm, **fake_models)["debug"]["timings"]
+    assert set(timings) == {"retrieve", "rerank", "clean_context", "llm", "total"}
+    assert all(isinstance(v, float) and v >= 0 for v in timings.values())
+    assert timings["total"] >= timings["llm"]
+
+
+def test_full_config_times_rewrite_and_decompose(fake_store, fake_llm, fake_models):
+    timings = ask("q", fake_store, Settings(), llm=fake_llm, **fake_models)["debug"]["timings"]
+    assert set(timings) == {
+        "rewrite", "decompose", "retrieve", "rerank", "clean_context", "llm", "total"}
+
+
+def test_empty_retrieval_carries_the_timings_measured_so_far(empty_store, fake_llm, fake_models):
+    cfg = Settings(use_rewrite=False, use_decomposition=False)
+    timings = ask("q", empty_store, cfg, llm=fake_llm, **fake_models)["debug"]["timings"]
+    assert set(timings) == {"retrieve", "total"}
