@@ -3,8 +3,7 @@
 Upload PDFs, ask questions, get answers that cite the page they came from.
 
 > **Status:** the service, UI, and Docker image are done and tested. The live
-> demo link, the answer-quality numbers, and the latency table are coming soon
-> (they wait on LLM API keys).
+> demo link and the latency table are coming soon (they wait on LLM API keys).
 
 ## Why it's built this way
 
@@ -69,10 +68,34 @@ reranker is what turns that pool into better top results: hit rate 0.61 → 0.76
 and MRR 0.32 → 0.51. The served app runs the `+rerank` arm. Full output:
 [`eval/results/summary.md`](eval/results/summary.md).
 
-### Answer quality — coming soon
+### Answer quality
 
-Correctness, faithfulness, and refusal rates from an LLM judge. Filled in by
-`python -m docuchat.evaluate run --judge`.
+Same 43 questions, answered by Qwen3 8B and graded by Qwen3 14B (both local
+GGUFs via llama.cpp, run on a Kaggle T4 with
+[`eval/kaggle_eval.ipynb`](eval/kaggle_eval.ipynb)). `full` adds LLM query
+rewriting and decomposition on top of `+rerank`; the last two arms swap one
+thing in `full`.
+
+| arm | correct | mean correctness (0–2) | faithful | false refusals |
+|---|---|---|---|---|
+| baseline | 0.698 [0.558, 0.814] | 1.651 [1.488, 1.814] | 0.744 [0.628, 0.860] | 0.211 [0.079, 0.342] |
+| +hybrid | 0.698 [0.558, 0.814] | 1.558 [1.326, 1.744] | 0.744 [0.605, 0.860] | 0.158 [0.053, 0.263] |
+| +rerank | 0.674 [0.535, 0.814] | 1.581 [1.372, 1.767] | 0.698 [0.558, 0.837] | 0.105 [0.026, 0.211] |
+| full (+ query rewrite/decompose) | 0.698 [0.558, 0.837] | 1.628 [1.441, 1.791] | 0.721 [0.581, 0.860] | **0.079** [0.000, 0.184] |
+| full, generic profile | 0.721 [0.581, 0.860] | 1.628 [1.419, 1.814] | 0.721 [0.581, 0.860] | 0.105 [0.026, 0.211] |
+| full, bge-base embedder | **0.767** [0.628, 0.884] | **1.744** [1.581, 1.884] | **0.814** [0.674, 0.930] | 0.132 [0.026, 0.263] |
+
+Better retrieval mostly shows up as fewer wrong refusals (0.21 → 0.08): with
+the evidence in context, the model stops saying "I don't know" when it does.
+Correctness stays near 0.70 across the retrieval arms, so at this size the
+answering model, not retrieval, is the ceiling. The larger bge-base embedder is
+the best arm on every answer metric, but its intervals overlap `full`'s. Every
+arm refused every unanswerable question correctly.
+
+Caveats: the judge is a 14B local model, not the frontier-model judge the
+design calls for, and it has not been checked against hand labels. Read these
+as relative comparisons between arms. Full output:
+[`eval/results/judged_summary.md`](eval/results/judged_summary.md).
 
 ### Latency — coming soon
 
