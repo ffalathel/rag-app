@@ -1499,7 +1499,7 @@ Do not start this task until the owner has an LLM API key (Anthropic, or Gemini 
   - Add `.env.*` and `**/.env` to `.dockerignore`.
   - `rm /tmp/warm.pdf` in the same `RUN` as the warm step.
 
-- [ ] **Step 1 (owner): Create the Space.** On huggingface.co: New Space, SDK **Docker**, hardware **CPU basic** (free), visibility **public**. The access gate is the access control; a private Space would require visitors to have HF accounts. Add these Space **secrets**:
+- [ ] **Step 1 (owner): Create the Space.** On huggingface.co: New Space, SDK **Gradio** (blank template; Docker Spaces need HF PRO since July 2026, so `deploy.yml` stages a Gradio Space that runs `deploy/app.py`), hardware **CPU basic** (free), visibility **public**. The access gate is the access control; a private Space would require visitors to have HF accounts. Add these Space **secrets**:
   - the LLM key (`ANTHROPIC_API_KEY`, or `GOOGLE_API_KEY`)
   - `DOCUCHAT_ACCESS_KEY`, generated with `python -c "import secrets; print(secrets.token_urlsafe(24))"`
   - `DOCUCHAT_LLM_PROVIDER`, only if not `anthropic`

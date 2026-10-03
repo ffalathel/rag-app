@@ -8,3 +8,5 @@ docs
 notebooks
 eval/results
 complete_mortgage_rag_pipeline.py
+.env.*
+**/.env
