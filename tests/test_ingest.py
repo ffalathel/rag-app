@@ -56,7 +56,30 @@ def test_load_directory_finds_pdfs_case_insensitively_in_sorted_order(tmp_path, 
     seen = []
     monkeypatch.setattr(
         "docuchat.ingest.load_pdf",
-        lambda path, cfg: (seen.append(Path(path).name), [])[1],
+        lambda path, cfg, converter=None: (seen.append(Path(path).name), [])[1],
     )
     load_directory(tmp_path, Settings())
     assert seen == ["REPORT.PDF", "b_lower.pdf"]
+
+
+def test_load_directory_builds_one_converter_and_shares_it(tmp_path, monkeypatch):
+    for name in ("a.pdf", "b.pdf"):
+        (tmp_path / name).write_bytes(b"%PDF-1.4\n")
+
+    converter_calls = []
+
+    def fake_make_converter(cfg):
+        converter = object()
+        converter_calls.append(converter)
+        return converter
+
+    load_pdf_calls = []
+    monkeypatch.setattr("docuchat.ingest._make_converter", fake_make_converter)
+    monkeypatch.setattr(
+        "docuchat.ingest.load_pdf",
+        lambda path, cfg, converter=None: (load_pdf_calls.append(converter), [])[1],
+    )
+    load_directory(tmp_path, Settings())
+
+    assert len(converter_calls) == 1
+    assert load_pdf_calls == [converter_calls[0], converter_calls[0]]

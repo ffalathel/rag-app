@@ -36,13 +36,36 @@ def test_generic_profile_routes_everything_to_the_llm(fake_llm):
     assert fake_llm.calls == 1
 
 
-def test_llm_used_only_when_heuristic_returns_unknown(fake_llm):
+def test_later_pages_inherit_the_first_pages_label(fake_llm):
     pages = [
         {"text": "CLOSING DISCLOSURE ...", "page_number": 1, "filename": "a.pdf"},
         {"text": "x" * 100, "page_number": 2, "filename": "a.pdf"},
     ]
     classify_pages(pages, fake_llm, Settings())
-    assert fake_llm.calls == 1
+    assert fake_llm.calls == 0
+    assert [p["doc_type"] for p in pages] == ["Closing Disclosure", "Closing Disclosure"]
+
+
+def test_label_is_per_document_not_per_page(fake_llm):
+    pages = [
+        {"text": "CLOSING DISCLOSURE loan terms", "page_number": 1, "filename": "cd.pdf"},
+        {"text": "Escrow account details " + "x" * 80, "page_number": 2, "filename": "cd.pdf"},
+        {"text": "Loan Estimate comparison " + "x" * 80, "page_number": 3, "filename": "cd.pdf"},
+    ]
+    classify_pages(pages, fake_llm, Settings())
+    assert [p["doc_type"] for p in pages] == ["Closing Disclosure"] * 3
+    assert fake_llm.calls == 0
+
+
+def test_each_document_classified_once(fake_llm):
+    pages = [
+        {"text": "x" * 100, "page_number": 1, "filename": "a.pdf"},
+        {"text": "x" * 100, "page_number": 2, "filename": "a.pdf"},
+        {"text": "PROMISSORY NOTE", "page_number": 1, "filename": "b.pdf"},
+    ]
+    classify_pages(pages, fake_llm, Settings())
+    assert fake_llm.calls == 1  # a.pdf's first page only; b.pdf hits the heuristic
+    assert [p["doc_type"] for p in pages] == ["Other", "Other", "Promissory Note"]
 
 
 def test_llm_classification_skipped_when_disabled(fake_llm):

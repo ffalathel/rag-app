@@ -7,11 +7,13 @@ from docuchat.config import Settings
 from docuchat.models import (
     _load_cross_encoder,
     _load_embed_model,
+    _load_judge_llm,
     _load_llm,
     _sentence_transformer_of,
     get_cross_encoder,
     get_embed_model,
     get_encoder,
+    get_judge_llm,
     get_llm,
 )
 
@@ -93,6 +95,12 @@ def test_encoder_and_embed_model_share_one_loaded_model():
     assert get_encoder(cfg) is _sentence_transformer_of(get_embed_model(cfg))
 
 
+def test_get_judge_llm_requires_key(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY"):
+        get_judge_llm(Settings())
+
+
 def test_cross_encoder_and_encoder_ignore_unrelated_settings_changes(monkeypatch):
     """Two Settings differing only in use_rerank must not evict/reload the
     encoder or cross-encoder -- they're cached on a narrower key than the
@@ -101,7 +109,7 @@ def test_cross_encoder_and_encoder_ignore_unrelated_settings_changes(monkeypatch
 
     class FakeHuggingFaceEmbedding:
         def __init__(self, model_name):
-            self._model = object()
+            self._model = types.SimpleNamespace(encode=lambda *a, **k: None)
 
     fake_hf_module = types.ModuleType("llama_index.embeddings.huggingface")
     fake_hf_module.HuggingFaceEmbedding = FakeHuggingFaceEmbedding
@@ -110,6 +118,9 @@ def test_cross_encoder_and_encoder_ignore_unrelated_settings_changes(monkeypatch
     class FakeCrossEncoder:
         def __init__(self, name, max_length):
             self.name = name
+
+        def predict(self, pairs):
+            return [0.0] * len(pairs)
 
     fake_st_module = types.ModuleType("sentence_transformers")
     fake_st_module.CrossEncoder = FakeCrossEncoder
@@ -123,3 +134,50 @@ def test_cross_encoder_and_encoder_ignore_unrelated_settings_changes(monkeypatch
 
     assert get_encoder(cfg_rerank) is get_encoder(cfg_no_rerank)
     assert get_cross_encoder(cfg_rerank) is get_cross_encoder(cfg_no_rerank)
+
+
+def test_get_judge_llm_gemini_uses_google_key(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    cfg = Settings(judge_model="gemini-3.7-pro")
+    with pytest.raises(RuntimeError, match="GOOGLE_API_KEY"):
+        get_judge_llm(cfg)
+
+    class FakeGoogleGenAI:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+    fake = types.ModuleType("llama_index.llms.google_genai")
+    fake.GoogleGenAI = FakeGoogleGenAI
+    monkeypatch.setitem(sys.modules, "llama_index.llms.google_genai", fake)
+    monkeypatch.setenv("GOOGLE_API_KEY", "x")
+    _load_judge_llm.cache_clear()
+    judge = get_judge_llm(cfg)
+    assert isinstance(judge, FakeGoogleGenAI)
+    assert judge.kwargs["model"] == "gemini-3.7-pro"
+    _load_judge_llm.cache_clear()
+
+
+def test_get_judge_llm_gguf_uses_local_qwen3(monkeypatch, tmp_path):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="GGUF not found"):
+        get_judge_llm(Settings(judge_model=str(tmp_path / "missing.gguf")))
+
+    class FakeLlamaCPP:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+    fake = types.ModuleType("llama_index.llms.llama_cpp")
+    fake.LlamaCPP = FakeLlamaCPP
+    monkeypatch.setitem(sys.modules, "llama_index.llms.llama_cpp", fake)
+    gguf = tmp_path / "judge.gguf"
+    gguf.write_bytes(b"")
+    _load_judge_llm.cache_clear()
+    judge = get_judge_llm(Settings(judge_model=str(gguf)))
+    assert isinstance(judge, FakeLlamaCPP)
+    assert judge.kwargs["model_path"] == str(gguf)
+    assert judge.kwargs["temperature"] == 0.0
+    prompt = judge.kwargs["completion_to_prompt"]("hi")
+    assert prompt.startswith("<|im_start|>user\nhi<|im_end|>") and "</think>" in prompt
+    _load_judge_llm.cache_clear()

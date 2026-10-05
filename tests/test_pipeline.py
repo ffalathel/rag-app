@@ -39,7 +39,26 @@ def test_sources_carry_citation_metadata(fake_llm, fake_store, fake_models):
 
 def test_debug_records_rewritten_query_and_sub_queries(fake_llm, fake_store, fake_models):
     result = ask("q", fake_store, Settings(), llm=fake_llm, **fake_models)
-    assert set(result["debug"]) == {"original_query", "rewritten_query", "sub_queries"}
+    assert set(result["debug"]) == {
+        "original_query", "rewritten_query", "sub_queries", "candidates", "contexts",
+    }
+
+
+def test_ask_records_candidates_and_contexts(fake_store, fake_llm, fake_models):
+    cfg = Settings(
+        use_rewrite=False, use_decomposition=False, use_rerank=True, retrieval_mode="bm25"
+    )
+    result = ask("q", fake_store, cfg, llm=fake_llm, **fake_models)
+    debug = result["debug"]
+    assert debug["candidates"] == [("a.pdf", 1)] * 3
+    assert len(debug["contexts"]) == result["num_chunks_used"]
+    assert all(c in {"doc 0", "doc 1", "doc 2"} for c in debug["contexts"])
+
+
+def test_empty_retrieval_has_empty_candidates_and_contexts(empty_store, fake_llm, fake_models):
+    result = ask("anything", empty_store, Settings(), llm=fake_llm, **fake_models)
+    assert result["debug"]["candidates"] == []
+    assert result["debug"]["contexts"] == []
 
 
 @pytest.mark.parametrize("profile", ["mortgage", "generic"])

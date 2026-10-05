@@ -67,7 +67,7 @@ class Settings:
 
     # Retrieval
     retrieval_mode: str = "hybrid"
-    top_k: int = 10
+    top_k: int = 30
     rrf_k: int = 60
     use_rewrite: bool = True
     use_decomposition: bool = True
@@ -75,10 +75,10 @@ class Settings:
 
     # Rerank
     use_rerank: bool = True
-    rerank_top_n: int = 5
+    rerank_top_n: int = 15
     min_rerank_score: Optional[float] = None
-    dedup_threshold: float = 0.92
-    max_context_tokens: int = 2000
+    dedup_threshold: float = 0.97
+    max_context_tokens: int = 4000
 
     # Models
     llm_provider: str = "anthropic"
@@ -90,6 +90,9 @@ class Settings:
     cross_encoder_name: str = "BAAI/bge-reranker-v2-m3"
     cross_encoder_max_length: int = 1024
     gguf_path: str = ""
+
+    # Evaluation
+    judge_model: str = "claude-opus-5-5"
 
     def __post_init__(self) -> None:
         if self.retrieval_mode not in _RETRIEVAL_MODES:

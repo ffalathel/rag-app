@@ -3,7 +3,7 @@
 Replaces the notebook's hand-rolled OCR chain (preprocess_image,
 ocr_with_paddle, ocr_with_tesseract, ingest_pdf, ingest_all_pdfs) with
 Docling's layout/OCR/table-structure pipeline. Docling (and its torch
-dependency) is imported inside `load_pdf`, never at module scope, so
+dependency) is imported inside `_make_converter`, never at module scope, so
 importing this module stays cheap -- see test_import_purity.py.
 """
 
@@ -34,20 +34,30 @@ def _pages_from_texts(filename: str, texts: list[str], cfg: Settings) -> list[di
     return pages
 
 
-def load_pdf(path: str | Path, cfg: Settings) -> list[dict]:
-    """Convert a single PDF into page dicts via Docling."""
+def _make_converter(cfg: Settings):
+    """Build a Docling DocumentConverter configured from cfg."""
     from docling.datamodel.base_models import InputFormat
     from docling.datamodel.pipeline_options import PdfPipelineOptions
     from docling.document_converter import DocumentConverter, PdfFormatOption
 
-    path = Path(path)
     pipeline_options = PdfPipelineOptions()
     pipeline_options.do_ocr = cfg.do_ocr
     pipeline_options.do_table_structure = cfg.do_table_structure
 
-    converter = DocumentConverter(
+    return DocumentConverter(
         format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
     )
+
+
+def load_pdf(path: str | Path, cfg: Settings, converter=None) -> list[dict]:
+    """Convert a single PDF into page dicts via Docling.
+
+    Builds its own converter when none is given; load_directory shares one
+    converter across every PDF instead.
+    """
+    path = Path(path)
+    if converter is None:
+        converter = _make_converter(cfg)
     result = converter.convert(path)
     doc = result.document
 
@@ -59,7 +69,10 @@ def load_directory(folder: str | Path, cfg: Settings) -> list[dict]:
     """Convert every PDF in a directory (case-insensitive glob, sorted)."""
     folder = Path(folder)
     paths = sorted(p for p in folder.iterdir() if p.suffix.lower() == ".pdf")
+    if not paths:
+        return []
+    converter = _make_converter(cfg)
     pages = []
     for path in paths:
-        pages.extend(load_pdf(path, cfg))
+        pages.extend(load_pdf(path, cfg, converter=converter))
     return pages

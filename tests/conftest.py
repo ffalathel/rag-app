@@ -211,3 +211,13 @@ def text_nodes():
         )
         for i, text in enumerate(texts)
     ]
+
+
+@pytest.hookimpl(trylast=True)  # after -m deselection
+def pytest_collection_modifyitems(config, items):
+    # Integration tests call real APIs; load the API key from the repo's
+    # gitignored dotenv file for them only, so unit tests never see it.
+    if any(item.get_closest_marker("integration") for item in items):
+        from dotenv import load_dotenv
+
+        load_dotenv()
