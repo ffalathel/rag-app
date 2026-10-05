@@ -15,7 +15,7 @@ ENV HOME=/home/user \
 WORKDIR /home/user/app
 
 # CPU-only torch first, so sentence-transformers doesn't pull the CUDA build (~2 GB)
-RUN pip install --no-cache-dir --user torch torchvision --index-url https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir --user torch==2.14.0 torchvision==0.29.0 --index-url https://download.pytorch.org/whl/cpu
 
 COPY --chown=user pyproject.toml ./
 COPY --chown=user src ./src
@@ -27,7 +27,8 @@ COPY --chown=user tests/fixtures/cfpb_closing_disclosure.pdf /tmp/warm.pdf
 RUN python -c "from docuchat.config import Settings; \
 from docuchat.models import get_embed_model, get_cross_encoder; \
 from docuchat.ingest import load_pdf; \
-cfg = Settings(); get_embed_model(cfg); get_cross_encoder(cfg); load_pdf('/tmp/warm.pdf', cfg)"
+cfg = Settings(); get_embed_model(cfg); get_cross_encoder(cfg); load_pdf('/tmp/warm.pdf', cfg)" \
+    && rm /tmp/warm.pdf
 
 COPY --chown=user eval/corpus ./eval/corpus
 COPY --chown=user eval/nodes ./eval/nodes
