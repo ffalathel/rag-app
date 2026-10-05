@@ -1,0 +1,42 @@
+name: deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install huggingface_hub==1.33.0
+      # A Gradio Space (Docker Spaces need HF PRO): it pip-installs
+      # requirements.txt, apt-installs packages.txt, then runs app.py.
+      - name: Stage exactly what the Gradio Space needs
+        run: |
+          mkdir -p _space/eval
+          cp -r src _space/
+          cp -r eval/corpus eval/nodes eval/questions.yaml _space/eval/
+          cp deploy/app.py deploy/packages.txt _space/
+          cp deploy/space-README.md _space/README.md
+          # CPU-only torch (the +cpu pin only exists on that index), then
+          # pyproject's dependencies, so the list never drifts
+          python - > _space/requirements.txt <<'EOF'
+          import tomllib
+          print("--extra-index-url https://download.pytorch.org/whl/cpu")
+          print("torch==2.14.0+cpu\ntorchvision==0.29.0+cpu")
+          print("\n".join(tomllib.load(open("pyproject.toml", "rb"))["project"]["dependencies"]))
+          EOF
+      - name: Upload to the Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE: ${{ vars.HF_SPACE }}
+          SHA: ${{ github.sha }}
+        run: >
+          hf upload "$HF_SPACE" _space . --repo-type space
+          --delete "*" --commit-message "deploy $SHA"
