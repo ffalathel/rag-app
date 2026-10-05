@@ -45,7 +45,21 @@ def test_run_sends_the_key_on_every_request_and_collects_timings():
         assert body == {"session_id": "sid", "query": "Q1"}
         return httpx.Response(200, json={"timings": {"total": 5.0, "llm": 3.0}})
 
-    samples = run("https://x", "secret", [{"question": "Q1"}],
-                  transport=httpx.MockTransport(handler))
+    samples, failed = run("https://x", "secret", [{"question": "Q1"}],
+                          transport=httpx.MockTransport(handler))
     assert all(r.url.params["key"] == "secret" for r in seen)
     assert samples[0]["total"] == 5.0 and samples[0]["client"] >= 0
+    assert failed == 0
+
+
+def test_run_counts_and_skips_failed_asks():
+    def handler(request):
+        if request.url.path == "/api/sessions":
+            return httpx.Response(200, json={"session_id": "sid"})
+        if json.loads(request.content)["query"] == "bad":
+            return httpx.Response(502, json={"detail": "Model service error, try again."})
+        return httpx.Response(200, json={"timings": {"total": 5.0}})
+
+    samples, failed = run("https://x", None, [{"question": "ok"}, {"question": "bad"}],
+                          transport=httpx.MockTransport(handler))
+    assert len(samples) == 1 and failed == 1
