@@ -157,3 +157,27 @@ def test_get_judge_llm_gemini_uses_google_key(monkeypatch):
     assert isinstance(judge, FakeGoogleGenAI)
     assert judge.kwargs["model"] == "gemini-3.7-pro"
     _load_judge_llm.cache_clear()
+
+
+def test_get_judge_llm_gguf_uses_local_qwen3(monkeypatch, tmp_path):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="GGUF not found"):
+        get_judge_llm(Settings(judge_model=str(tmp_path / "missing.gguf")))
+
+    class FakeLlamaCPP:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+    fake = types.ModuleType("llama_index.llms.llama_cpp")
+    fake.LlamaCPP = FakeLlamaCPP
+    monkeypatch.setitem(sys.modules, "llama_index.llms.llama_cpp", fake)
+    gguf = tmp_path / "judge.gguf"
+    gguf.write_bytes(b"")
+    _load_judge_llm.cache_clear()
+    judge = get_judge_llm(Settings(judge_model=str(gguf)))
+    assert isinstance(judge, FakeLlamaCPP)
+    assert judge.kwargs["model_path"] == str(gguf)
+    assert judge.kwargs["temperature"] == 0.0
+    prompt = judge.kwargs["completion_to_prompt"]("hi")
+    assert prompt.startswith("<|im_start|>user\nhi<|im_end|>") and "</think>" in prompt
+    _load_judge_llm.cache_clear()

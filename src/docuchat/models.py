@@ -61,6 +61,17 @@ def _load_llm(llm_provider, llm_model, temperature, max_new_tokens, context_wind
         )
 
     # llm_provider == "llamacpp" (Settings validates there is no other value)
+    return _llamacpp(gguf_path, temperature, max_new_tokens, context_window)
+
+
+def _qwen3_prompt(completion: str) -> str:
+    # Qwen3's ChatML format; the empty think block switches off thinking mode
+    return f"<|im_start|>user\n{completion}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+
+
+def _llamacpp(gguf_path, temperature, max_new_tokens, context_window):
+    """A Qwen3 GGUF via llama.cpp. Not thread-safe (LlamaCPP mutates its
+    generate_kwargs per call): run the eval with --workers 1."""
     from llama_index.llms.llama_cpp import LlamaCPP
 
     return LlamaCPP(
@@ -68,6 +79,8 @@ def _load_llm(llm_provider, llm_model, temperature, max_new_tokens, context_wind
         temperature=temperature,
         max_new_tokens=max_new_tokens,
         context_window=context_window,
+        completion_to_prompt=_qwen3_prompt,
+        generate_kwargs={"stop": ["<|im_end|>"]},
         model_kwargs={"n_gpu_layers": -1},
     )
 
@@ -121,6 +134,9 @@ def _load_judge_llm(judge_model, max_new_tokens, context_window):
             context_window=context_window,
         )
 
+    if judge_model.endswith(".gguf"):
+        return _llamacpp(judge_model, 0.0, max_new_tokens, context_window)
+
     from llama_index.llms.anthropic import Anthropic
 
     return Anthropic(model=judge_model, temperature=0.0, max_tokens=max_new_tokens)
@@ -128,9 +144,13 @@ def _load_judge_llm(judge_model, max_new_tokens, context_window):
 
 def get_judge_llm(cfg: Settings):
     """Return the judge LLM used to score answers during evaluation: Gemini
-    when `judge_model` starts with "gemini", otherwise Anthropic. Temperature
-    0.0 where the model accepts one."""
-    if cfg.judge_model.startswith("gemini"):
+    when `judge_model` starts with "gemini", a local llama.cpp model when it
+    is a path ending ".gguf", otherwise Anthropic. Temperature 0.0 where the
+    model accepts one."""
+    if cfg.judge_model.endswith(".gguf"):
+        if not os.path.exists(cfg.judge_model):
+            raise RuntimeError(f"judge_model GGUF not found: {cfg.judge_model!r}")
+    elif cfg.judge_model.startswith("gemini"):
         if not (os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")):
             raise RuntimeError(
                 "GOOGLE_API_KEY (or GEMINI_API_KEY) is not set; required for a gemini judge_model"

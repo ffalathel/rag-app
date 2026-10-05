@@ -749,7 +749,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         unreachable.update(unreachable_evidence(questions, nodes))
         store = store_from_nodes(nodes, cfg)
 
-        records = run_arm(name, questions, store, cfg, answer_llm, judge_llm=judge_llm, workers=8)
+        records = run_arm(name, questions, store, cfg, answer_llm, judge_llm=judge_llm, workers=args.workers)
         arm_records[name] = records
 
         arm_ragas = None
@@ -842,6 +842,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p_run = sub.add_parser("run")
     p_run.add_argument("--arms", default=None)
+    p_run.add_argument("--workers", type=int, default=8)
     p_run.add_argument("--judge", action="store_true")
     p_run.add_argument("--ragas", action="store_true")
 
