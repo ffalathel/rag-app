@@ -163,9 +163,12 @@ Results land in `eval/results/`. The questions are in
 
 ## Deploy
 
-The app runs on a Hugging Face Docker Space, private behind a link:
+The app runs on a Hugging Face Space, private behind a link. The deploy
+workflow stages a Gradio Space that runs `deploy/app.py`, which serves the same
+FastAPI app the Dockerfile runs. CPU Spaces need an HF PRO plan (the free tier
+only offers ZeroGPU, which this app doesn't use).
 
-1. Create a Docker Space and set its secrets: an LLM key and
+1. Create a Gradio Space on CPU hardware and set its secrets: an LLM key and
    `DOCUCHAT_ACCESS_KEY`.
 2. In this GitHub repo, add the `HF_TOKEN` secret and the `HF_SPACE` variable
    (`user/space-name`).
