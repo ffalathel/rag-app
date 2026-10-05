@@ -1,5 +1,9 @@
 """Shared pytest fixtures."""
 
+import os
+
+os.environ.setdefault("GRADIO_ANALYTICS_ENABLED", "False")  # no network from the default suite
+
 import numpy as np
 import pytest
 from llama_index.core.schema import TextNode
@@ -221,3 +225,41 @@ def pytest_collection_modifyitems(config, items):
         from dotenv import load_dotenv
 
         load_dotenv()
+
+
+class _FakeService:
+    """Stands in for docuchat.service.Service in API/UI tests."""
+
+    def __init__(self):
+        from docuchat.config import Settings
+
+        self.cfg = Settings()
+        self.ensured = False
+        self.uploads = []
+        self.resets = []
+        self.error = None  # set to a ServiceError to make answer/ingest raise it
+
+    def ensure_sample(self):
+        self.ensured = True
+
+    def new_session(self):
+        return "sid"
+
+    def answer(self, session_id, query):
+        if self.error:
+            raise self.error
+        return {"answer": "a", "sources": [], "timings": {"total": 1.0}, "expired": False}
+
+    def ingest_upload(self, session_id, files):
+        if self.error:
+            raise self.error
+        self.uploads.append((session_id, files))
+        return 3
+
+    def reset(self, session_id):
+        self.resets.append(session_id)
+
+
+@pytest.fixture
+def fake_service():
+    return _FakeService()

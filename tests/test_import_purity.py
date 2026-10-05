@@ -26,6 +26,10 @@ HEAVY = {"torch", "docling", "sentence_transformers", "llama_index.embeddings.hu
         "docuchat.index",
         "docuchat.retrieval",
         "docuchat.rerank",
+        "docuchat.service",
+        "docuchat.api",
+        "docuchat.ui",
+        "docuchat.bench",
     ],
 )
 def test_import_does_not_load_heavy_deps(module):
