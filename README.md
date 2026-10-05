@@ -2,8 +2,8 @@
 
 Upload PDFs, ask questions, get answers that cite the page they came from.
 
-> **Status:** the service, UI, and Docker image are done and tested. The live
-> demo link and the latency table are coming soon (they wait on LLM API keys).
+> **Status:** the service, UI, and Docker image are done and tested. A demo
+> recording is coming soon.
 
 ## Why it's built this way
 
@@ -97,10 +97,28 @@ design calls for, and it has not been checked against hand labels. Read these
 as relative comparisons between arms. Full output:
 [`eval/results/judged_summary.md`](eval/results/judged_summary.md).
 
-### Latency — coming soon
+### Latency
 
-p50/p95 per pipeline stage against the deployed Space. Filled in by
-`python -m docuchat.bench --url <space-url> --key <key>`.
+Per-stage p50/p95 for the `+rerank` arm, measured over HTTP against a 4-core
+CPU GitHub Codespace with Gemini 3.7 Flash (free tier) as the answering model.
+Milliseconds.
+
+| stage | p50 | p95 |
+|---|---|---|
+| retrieve | 35 | 36 |
+| rerank | 3,280 | 3,309 |
+| clean_context | 3,090 | 3,119 |
+| llm | 12,402 | 19,130 |
+| total (server) | 18,863 | 25,535 |
+| end-to-end (client) | 18,945 | 25,705 |
+
+A question takes about 19 s, and most of that is the LLM call. On this CPU
+host the reranker is swapped for `cross-encoder/ms-marco-MiniLM-L-6-v2` at
+512 tokens (two `DOCUCHAT_*` variables, no code change): the default
+`bge-reranker-v2-m3` took 125–130 s per question on 4 vCPUs. The quality
+numbers above are for the default reranker. This is a small sample, 3 warm
+requests after 1 cold one, because the free Gemini tier rejected the rest.
+Details: [`eval/results/latency.md`](eval/results/latency.md).
 
 ## Demo — coming soon
 
