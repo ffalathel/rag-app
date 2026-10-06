@@ -13,6 +13,10 @@ nothing for ranking. The [Results](#results) section has the full ablation.
 No key needed. Ask about the sample mortgage documents, or upload your own
 PDF (up to 10 MB, 30 pages).
 
+It's slow, and that's normal for a free CPU. Indexing an uploaded PDF takes
+about a minute. A question takes about 20 seconds when Gemini answers and
+about 50 when the local model does. Leave the tab open and it gets there.
+
 Fair warning: it may not work when you try it. I can't pay for an API key or a
 server, so the whole thing runs on free tiers. Answers come from Gemini's free
 tier, which gives me about 20 questions a day and throws "high demand" errors
