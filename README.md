@@ -140,21 +140,21 @@ Details: [`eval/results/latency.md`](eval/results/latency.md).
 
 ## Run it
 
-Python 3.11+.
+You need Python 3.11+. Run everything from the repo folder.
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-On a bare Linux machine (a server, a Codespace, a slim Docker image), Docling's
-OCR also needs a few system libraries:
+On a bare Linux machine (a server, a Codespace, a slim Docker image), Docling
+also needs a few system libraries:
 
 ```bash
 sudo apt-get install -y libgl1 libglib2.0-0 libxcb1
 ```
 
-Put one LLM key in a `.env` at the repo root (it's gitignored):
+Put one LLM key in a `.env` file in the repo folder (it's gitignored):
 
 ```bash
 ANTHROPIC_API_KEY=...          # default provider
@@ -163,32 +163,44 @@ GEMINI_API_KEY=...
 DOCUCHAT_LLM_PROVIDER=gemini
 ```
 
-Any `Settings` field can be set the same way, as `DOCUCHAT_<FIELD>`.
-
-Start the server. The UI is at http://localhost:7860 and the API is under
-`/api`:
+Then start it and open http://localhost:7860:
 
 ```bash
-uvicorn docuchat.api:app --env-file .env --port 7860
+docuchat
 ```
 
-No GPU? The default reranker takes about two minutes per question on a
-4-core CPU. Set these before starting the server to use the small one the demo
-uses:
+That's the full pipeline. Add flags for your situation:
 
-```bash
-export DOCUCHAT_CROSS_ENCODER_NAME=cross-encoder/ms-marco-MiniLM-L-6-v2
-export DOCUCHAT_CROSS_ENCODER_MAX_LENGTH=512
-```
+| your situation | command |
+|---|---|
+| Your PDFs have real text, not scans | `docuchat --no-ocr` |
+| No GPU (most laptops, any cloud VM) | `docuchat --cpu` |
+| You want an answer even when the API fails | `docuchat --fallback` |
+| No API key at all | `docuchat --local` |
+| Hosting it for other people | `docuchat --public` |
 
-With no key, the app still starts and uploads still index, but questions come
-back "LLM not configured." Set `DOCUCHAT_ACCESS_KEY` to turn on the access
-gate; visitors then need a `?key=` link.
+Flags combine. The live demo runs `docuchat --cpu --no-ocr --fallback --public`.
+`docuchat --help` lists them all.
 
-To get the local fallback the demo uses, run `pip install -e ".[local-llm]"`
-and point `DOCUCHAT_GGUF_PATH` at a Qwen3 GGUF. When the API call fails, the
-local model answers instead. `DOCUCHAT_LLM_PROVIDER=llamacpp` skips the API
-entirely.
+What each one costs you:
+
+- `--no-ocr` makes uploads several times faster. A scanned PDF (a photo of
+  paper) comes out empty, though, because OCR is what reads it.
+- `--cpu` swaps the reranker for a small one: about 3 s per question instead of
+  about 2 minutes on a 4-core CPU. The results above use the full one; I
+  haven't measured the small one.
+- `--fallback` and `--local` need `pip install -e ".[local-llm]"` first, which
+  compiles llama.cpp (a few minutes). The model, Qwen3 1.7B, downloads itself
+  on first run (about 1.1 GB). It's slower and weaker than the API models.
+- `--public` listens on every network interface instead of only your machine.
+  Set `DOCUCHAT_ACCESS_KEY` in `.env` if you don't want strangers in; visitors
+  then need a `?key=` link.
+
+With no key and no `--local`, the app still starts and uploads still index,
+but questions come back "LLM not configured."
+
+Each flag just sets `DOCUCHAT_*` settings, and any field on `Settings` can be
+set the same way in `.env`, as `DOCUCHAT_<FIELD>`.
 
 With Docker (the models are baked into the image, so it starts offline):
 
@@ -218,8 +230,9 @@ are in [`eval/corpus/`](eval/corpus/SOURCES.md).
 
 ## Deploy
 
-The demo runs in a GitHub Codespace. I start the server as in
-[Run it](#run-it) and set port 7860 to public in the Ports tab.
+The demo runs in a GitHub Codespace. I start it with
+`docuchat --cpu --no-ocr --fallback --public` and set port 7860 to public in
+the Ports tab.
 `DOCUCHAT_DAILY_QUERY_CAP` and `DOCUCHAT_DAILY_UPLOAD_CAP` limit how much a
 public link can spend.
 
@@ -243,6 +256,7 @@ src/docuchat/
   evaluate.py    evaluation harness
   judge.py       LLM judge
   bench.py       HTTP latency benchmark
+  cli.py         the `docuchat` command
 eval/            corpus, questions, node snapshots, results
 tests/
 Dockerfile

@@ -138,6 +138,16 @@ def test_llm_is_resolved_lazily(make_service):
     assert make_service(llm_factory=no_key).answer("s", "q")["answer"] == "SAMPLE"
 
 
+def test_sample_loads_whatever_the_upload_ingestion_settings(monkeypatch, clock):
+    import docuchat.service as service
+
+    seen = {}
+    monkeypatch.setattr(service, "load_snapshot", lambda path, corpus, cfg: seen.setdefault("cfg", cfg) and [])
+    monkeypatch.setattr(service, "store_from_nodes", lambda nodes, cfg: SAMPLE)
+    Service(Settings(do_ocr=False, do_table_structure=False), clock=clock).ensure_sample()
+    assert seen["cfg"].do_ocr is True and seen["cfg"].do_table_structure is True
+
+
 def test_ensure_sample_is_a_no_op_when_a_store_is_given(make_service):
     svc = make_service()
     svc.ensure_sample()

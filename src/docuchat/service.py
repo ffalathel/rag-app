@@ -16,7 +16,7 @@ from pathlib import Path
 
 from docuchat.classify import classify_pages
 from docuchat.config import Settings
-from docuchat.evaluate import CORPUS_DIR, NODES_DIR, arm_settings, load_snapshot
+from docuchat.evaluate import CORPUS_DIR, INGEST_FIELDS, NODES_DIR, arm_settings, load_snapshot
 from docuchat.index import Store, build_store, store_from_nodes
 from docuchat.ingest import load_directory
 from docuchat.models import get_llm
@@ -171,7 +171,11 @@ class Service:
         """Build the shared sample store from the committed snapshot, once.
         Called from the app's startup hook, never at import."""
         if self.sample_store is None:
-            nodes = load_snapshot(NODES_DIR / f"{SAMPLE_PROFILE}.jsonl", CORPUS_DIR, self.cfg)
+            # The snapshot is prebuilt, so ingestion settings (do_ocr, ...) only
+            # apply to uploads; check it against the defaults it was built with.
+            defaults = Settings()
+            built_with = replace(self.cfg, **{f: getattr(defaults, f) for f in INGEST_FIELDS})
+            nodes = load_snapshot(NODES_DIR / f"{SAMPLE_PROFILE}.jsonl", CORPUS_DIR, built_with)
             self.sample_store = store_from_nodes(nodes, self.cfg)
 
     def new_session(self) -> str:

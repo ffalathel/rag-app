@@ -24,6 +24,9 @@ dependencies = [
     "gradio==6.29.0",
 ]
 
+[project.scripts]
+docuchat = "docuchat.cli:main"
+
 [project.optional-dependencies]
 local-llm = ["llama-index-llms-llama-cpp==0.7.0", "llama-cpp-python==0.3.35"]
 dev = ["pytest==9.1.1", "httpx==0.28.1"]
