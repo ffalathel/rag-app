@@ -6,11 +6,12 @@ pipeline logic and the REST tests exercise the same path the UI uses.
 """
 
 import datetime
+import logging
 import tempfile
 import threading
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from docuchat.classify import classify_pages
@@ -20,6 +21,8 @@ from docuchat.index import Store, build_store, store_from_nodes
 from docuchat.ingest import load_directory
 from docuchat.models import get_llm
 from docuchat.pipeline import ask
+
+logger = logging.getLogger(__name__)
 
 SERVED_ARM = "+rerank"
 SAMPLE_PROFILE = "mortgage"
@@ -75,7 +78,15 @@ class _LazyLLM:
         try:
             return self._llm.complete(prompt)
         except Exception as exc:
-            raise LLMError() from exc
+            # a free-tier API's 503s/429s fall back to a local GGUF when one is set
+            if not self._cfg.gguf_path or self._cfg.llm_provider == "llamacpp":
+                raise LLMError() from exc
+            logger.warning("%s failed (%s); falling back to the local model",
+                           self._cfg.llm_provider, exc)
+            try:
+                return self._factory(replace(self._cfg, llm_provider="llamacpp", llm_model="")).complete(prompt)
+            except Exception as fallback_exc:
+                raise LLMError() from fallback_exc
 
 
 def check_upload(files: list[tuple[str, bytes]], cfg: Settings) -> None:

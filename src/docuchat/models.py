@@ -37,7 +37,7 @@ def _serialized(method):
     return wrapper
 
 
-@lru_cache(maxsize=1)
+@lru_cache(maxsize=2)  # the configured LLM plus the local fallback (service._LazyLLM)
 def _load_llm(llm_provider, llm_model, temperature, max_new_tokens, context_window, gguf_path):
     """Construct the LLM, cached only on the fields it actually depends on so
     an ablation arm that varies an unrelated Settings field (e.g. use_rerank)

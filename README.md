@@ -156,6 +156,11 @@ DOCUCHAT_LLM_PROVIDER=gemini
 
 Any `Settings` field can be overridden the same way, as `DOCUCHAT_<FIELD>`.
 
+Optional local fallback: install `pip install -e ".[local-llm]"` and set
+`DOCUCHAT_GGUF_PATH` to a Qwen3 GGUF. When the API call fails (rate limit,
+"high demand"), the answer comes from that local model instead of an error.
+With `DOCUCHAT_LLM_PROVIDER=llamacpp`, the local model is the only one used.
+
 Start the server. The UI is at http://localhost:7860, the API under `/api`:
 
 ```bash

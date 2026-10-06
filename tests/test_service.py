@@ -106,6 +106,30 @@ def test_llm_call_failure_maps_to_llm_error(make_service):
     assert exc.value.status == 502
 
 
+def test_llm_failure_falls_back_to_the_local_gguf_when_one_is_set(make_service):
+    class Broken:
+        def complete(self, prompt):
+            raise ConnectionError("503 high demand")
+
+    class Local:
+        def complete(self, prompt):
+            return "local answer"
+
+    def factory(cfg):
+        return Local() if cfg.llm_provider == "llamacpp" else Broken()
+
+    def ask_returning_completion(query, store, cfg, llm):
+        return {"answer": llm.complete("p"), "sources": [], "debug": {"timings": {}}}
+
+    svc = make_service(ask_fn=ask_returning_completion, llm_factory=factory,
+                       llm_provider="gemini", gguf_path="/models/qwen.gguf")
+    assert svc.answer("s", "q")["answer"] == "local answer"
+    # without a gguf_path the failure still surfaces as a 502
+    with pytest.raises(LLMError):
+        make_service(ask_fn=ask_returning_completion, llm_factory=factory,
+                     llm_provider="gemini").answer("s", "q")
+
+
 def test_llm_is_resolved_lazily(make_service):
     def no_key(cfg):
         raise RuntimeError("ANTHROPIC_API_KEY is not set")
