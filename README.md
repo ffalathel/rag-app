@@ -204,22 +204,8 @@ are in [`eval/corpus/`](eval/corpus/SOURCES.md).
 
 The demo runs in a GitHub Codespace. I start the server as in
 [Run it](#run-it) and set port 7860 to public in the Ports tab.
-
-I also wrote a workflow for a permanent Hugging Face Space, but since HF moved
-CPU Spaces to the PRO plan I can't use it for free. It stages a Gradio Space
-that runs `deploy/app.py`, which serves the same FastAPI app as the
-Dockerfile. If you have PRO:
-
-1. Create a Gradio Space on CPU hardware. Add an LLM key and
-   `DOCUCHAT_ACCESS_KEY` as secrets.
-2. In this GitHub repo, add the `HF_TOKEN` secret and the `HF_SPACE` variable
-   (`user/space-name`).
-3. Run the **deploy** workflow from the Actions tab.
-4. Share `https://<user>-<space>.hf.space/?key=<access key>`. The first visit
-   sets a cookie and strips the key from the URL. Anyone without it gets a 403.
-
 `DOCUCHAT_DAILY_QUERY_CAP` and `DOCUCHAT_DAILY_UPLOAD_CAP` limit how much a
-leaked link can spend.
+public link can spend.
 
 ## Repo layout
 
@@ -244,5 +230,4 @@ src/docuchat/
 eval/            corpus, questions, node snapshots, results
 tests/
 Dockerfile
-.github/workflows/deploy.yml
 ```
