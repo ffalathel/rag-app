@@ -103,7 +103,10 @@ Three arms, each adding one thing to the one before.
 
 Adding BM25 got the right page into the candidate pool more often (0.71 to
 0.83) but didn't rank it any higher; MRR actually dipped. The reranker is what
-cashed that in. The demo serves the `+rerank` arm. Full output:
+cashed that in. The demo runs the `+rerank` pipeline, but with a smaller
+reranker (`ms-marco-MiniLM-L-6-v2`, the `--cpu` flag) because the Codespace has
+no GPU. These numbers come from the default `bge-reranker-v2-m3`, and I haven't
+measured the small one. Full output:
 [`eval/results/summary.md`](eval/results/summary.md).
 
 ### Answer quality
