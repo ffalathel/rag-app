@@ -81,7 +81,7 @@ def _llamacpp(gguf_path, temperature, max_new_tokens, context_window):
         context_window=context_window,
         completion_to_prompt=_qwen3_prompt,
         generate_kwargs={"stop": ["<|im_end|>"]},
-        model_kwargs={"n_gpu_layers": -1},
+        model_kwargs={"n_gpu_layers": -1, "n_threads": os.cpu_count()},  # default is half the cores
     )
 
 

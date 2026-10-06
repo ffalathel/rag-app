@@ -20,7 +20,7 @@ from docuchat.evaluate import CORPUS_DIR, NODES_DIR, arm_settings, load_snapshot
 from docuchat.index import Store, build_store, store_from_nodes
 from docuchat.ingest import load_directory
 from docuchat.models import get_llm
-from docuchat.pipeline import ask
+from docuchat.pipeline import ask, shrink_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,8 @@ class _LazyLLM:
             logger.warning("%s failed (%s); falling back to the local model",
                            self._cfg.llm_provider, exc)
             try:
-                return self._factory(replace(self._cfg, llm_provider="llamacpp", llm_model="")).complete(prompt)
+                local = self._factory(replace(self._cfg, llm_provider="llamacpp", llm_model=""))
+                return local.complete(shrink_prompt(prompt, self._cfg.local_max_context_tokens))
             except Exception as fallback_exc:
                 raise LLMError() from fallback_exc
 

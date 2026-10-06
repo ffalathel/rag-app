@@ -79,6 +79,7 @@ class Settings:
     min_rerank_score: Optional[float] = None
     dedup_threshold: float = 0.97
     max_context_tokens: int = 4000
+    local_max_context_tokens: int = 1500  # the CPU fallback model's smaller budget
 
     # Models
     llm_provider: str = "anthropic"

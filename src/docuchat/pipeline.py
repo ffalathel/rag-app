@@ -22,6 +22,9 @@ def _ms(start: float) -> float:
     return round((time.perf_counter() - start) * 1000, 1)
 
 
+_CONTEXT_START, _CONTEXT_END, _SOURCE_SEP = "=== CONTEXT ===\n", "\n=== END CONTEXT ===", "\n\n---\n\n"
+
+
 def build_prompt(query: str, cleaned: list[tuple], cfg: Settings) -> str:
     """Build the grounded-answer prompt: profile preamble, numbered source
     headers, context delimiters, and the trailing question -- verbatim from
@@ -34,17 +37,35 @@ def build_prompt(query: str, cleaned: list[tuple], cfg: Settings) -> str:
             f"Type: {m.get('doc_type', '?')}, Section: {m.get('section_title', '?')}]\n"
             f"{node.get_content()}"
         )
-    context_block = "\n\n---\n\n".join(context_parts)
+    context_block = _SOURCE_SEP.join(context_parts)
 
     return f"""{cfg.profile.answer_system_prompt}
 
-=== CONTEXT ===
-{context_block}
-=== END CONTEXT ===
+{_CONTEXT_START}{context_block}{_CONTEXT_END}
 
 Question: {query}
 
 Answer (with citations):"""
+
+
+def shrink_prompt(prompt: str, max_context_tokens: int) -> str:
+    """Drop the lowest-ranked sources from a build_prompt() prompt until the
+    context fits max_context_tokens (same words*1.3 estimate as
+    clean_context). The top source is always kept. Used for the slow local
+    fallback model, which reads the prompt at ~40 tokens/s on a CPU. Prompts
+    without a context block (query rewrite, decomposition) pass through."""
+    if _CONTEXT_START not in prompt:
+        return prompt
+    head, rest = prompt.split(_CONTEXT_START, 1)
+    context, tail = rest.split(_CONTEXT_END, 1)
+    kept, total = [], 0.0
+    for i, part in enumerate(context.split(_SOURCE_SEP)):
+        tokens = len(part.split()) * 1.3
+        if i and total + tokens > max_context_tokens:
+            break
+        kept.append(part)
+        total += tokens
+    return head + _CONTEXT_START + _SOURCE_SEP.join(kept) + _CONTEXT_END + tail
 
 
 def ask(

@@ -4,7 +4,7 @@ import pytest
 
 import docuchat.pipeline as pipeline
 from docuchat.config import Settings
-from docuchat.pipeline import ask, build_prompt
+from docuchat.pipeline import ask, build_prompt, shrink_prompt
 
 
 def test_zero_retrieval_results_returns_documented_shape(fake_llm, empty_store, fake_models):
@@ -74,6 +74,18 @@ def test_prompt_preamble_comes_from_the_profile(make_node):
     assert "mortgage" in build_prompt("q", node, Settings()).lower()
     assert "mortgage" not in build_prompt(
         "q", node, Settings(domain_profile="generic")).lower()
+
+
+def test_shrink_prompt_keeps_the_top_sources_and_the_question(make_node):
+    nodes = [(make_node(text=f"src{i} " + "word " * 100), 1.0) for i in range(5)]
+    prompt = build_prompt("the question?", nodes, Settings())
+    short = shrink_prompt(prompt, 300)  # ~130 tokens per source
+    assert "src0" in short and "src1" in short and "src2" not in short
+    assert short.endswith("Question: the question?\n\nAnswer (with citations):")
+    # the top source survives even when it alone is over budget
+    assert "src0" in shrink_prompt(prompt, 1)
+    assert shrink_prompt(prompt, 10_000) == prompt
+    assert shrink_prompt("rewrite this query", 1) == "rewrite this query"
 
 
 def test_timings_hold_exactly_the_stages_that_ran(fake_store, fake_llm, fake_models):
