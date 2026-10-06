@@ -154,8 +154,9 @@ Measured over HTTP against the demo setup: a 4-core CPU Codespace with Gemini
 
 About 19 seconds per question, most of it waiting on Gemini. On that CPU the
 default `bge-reranker-v2-m3` took 125–130 s per question, so the demo swaps in
-`cross-encoder/ms-marco-MiniLM-L-6-v2` at 512 tokens through two environment
-variables. The quality numbers above use the default reranker. The sample is
+`cross-encoder/ms-marco-MiniLM-L-6-v2` at 512 tokens. The `--cpu` flag does
+this by setting `DOCUCHAT_CROSS_ENCODER_NAME` and
+`DOCUCHAT_CROSS_ENCODER_MAX_LENGTH`, so you can also set them yourself. The quality numbers above use the default reranker. The sample is
 small (1 cold request, 3 warm) because Gemini's free tier rejected the rest.
 Details: [`eval/results/latency.md`](eval/results/latency.md).
 
