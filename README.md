@@ -8,6 +8,10 @@ nothing for ranking. The [Results](#results) section has the full ablation.
 
 ## Live demo
 
+
+https://github.com/user-attachments/assets/3a00f825-e024-4c12-a50b-9432d9923885
+
+
 **https://redesigned-sniffle-7jvqgj6qp7vcx97g-7860.app.github.dev/**
 
 No key needed. Ask about the sample mortgage documents, or upload your own
