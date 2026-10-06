@@ -18,9 +18,19 @@ server, so the whole thing runs on free tiers. Answers come from Gemini's free
 tier, which gives me about 20 questions a day and throws "high demand" errors
 a lot. When Gemini fails, the app falls back to Qwen3 1.7B running on the
 Codespace's CPU. That answer is slower and noticeably dumber, but you get one.
-The app itself lives in a GitHub Codespace, which goes to sleep when nobody's
-using it, so if the page doesn't load at all, that's why. [Running it
+The app itself lives in a GitHub Codespace that I switch on when I'm sharing
+the link, so if the page doesn't load at all, it's off. [Running it
 locally](#run-it) with your own key always works.
+
+What the link gives you is the app and nothing else. The Codespace behind it is
+private to my account, so there's no way in to its files, terminal, or keys.
+A PDF you upload is visible only to your own session. The file is deleted
+once it's indexed, and the index goes away after 30 idle minutes.
+
+Want your own copy running? Because the repo is public, **Code → Codespaces →
+Create** on this page gives you one on your GitHub account, using your free
+hours. It won't have my API key, so add yours to `.env` or start it with
+`docuchat --local`.
 
 ## How it works
 
