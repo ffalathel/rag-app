@@ -28,7 +28,7 @@ def test_summarize_excludes_the_cold_first_request_and_absent_stages():
 
 def test_render_has_table_and_cold_line():
     samples = [{"total": 900.0, "client": 950.0}, {"total": 10.0, "client": 12.0}]
-    text = render("https://x.hf.space", samples, "abc123", "2026-10-01")
+    text = render("https://x.example", samples, "abc123", "2026-10-01")
     assert "| total | 10 | 10 |" in text
     assert "First request (cold): 950 ms" in text
     assert "+rerank" in text and "abc123" in text

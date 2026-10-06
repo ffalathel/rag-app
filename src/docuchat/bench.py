@@ -1,10 +1,10 @@
 """Latency benchmark: p50/p95 per pipeline stage against a running docuchat.
 
-    python -m docuchat.bench --url https://<space>.hf.space [--key KEY] [--limit N]
+    python -m docuchat.bench --url https://<host> [--key KEY] [--limit N]
 
 --key defaults to DOCUCHAT_ACCESS_KEY (from the environment or .env).
 
-An HTTP client, because free Spaces have no shell. Runs every question in
+An HTTP client, so it measures the deployed app as visitors see it. Runs every question in
 eval/questions.yaml sequentially in one session. The first request is
 reported separately as cold and excluded from the percentiles. Each run
 spends len(questions) (or --limit) of the server's daily query cap.
