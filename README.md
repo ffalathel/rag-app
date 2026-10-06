@@ -2,8 +2,9 @@
 
 Upload PDFs, ask questions, get answers that cite the page they came from.
 
-> **Status:** the service, UI, and Docker image are done and tested. A demo
-> recording is coming soon.
+> **Status:** done. Ingestion, retrieval, evaluation, the service, UI, and
+> Docker image are built and tested. [Try the live demo](#live-demo); it may
+> be down, see the note there.
 
 ## Why it's built this way
 
@@ -120,9 +121,20 @@ numbers above are for the default reranker. This is a small sample, 3 warm
 requests after 1 cold one, because the free Gemini tier rejected the rest.
 Details: [`eval/results/latency.md`](eval/results/latency.md).
 
-## Demo — coming soon
+## Live demo
 
-A short recording of uploading a PDF and asking questions about it.
+**https://redesigned-sniffle-7jvqgj6qp7vcx97g-7860.app.github.dev/**
+
+Upload a PDF (or use the mortgage corpus) and ask questions about it.
+
+> **It may not work when you try it.** This is a zero-budget project: I can't
+> pay for an LLM API key or a host, so the demo runs entirely on free tiers.
+> The answers come from Gemini's free tier, which allows about 20 questions
+> a day and often returns "high demand" errors. The app runs in a GitHub
+> Codespace, which goes to sleep when idle and has limited free hours. If you
+> get an error or the page doesn't load, the quota is used up or the
+> Codespace is asleep. [Run it locally](#run-it) with your own key and it
+> works the same way.
 
 ## Run it
 
@@ -181,8 +193,9 @@ Results land in `eval/results/`. The questions are in
 
 ## Deploy
 
-The app runs on a Hugging Face Space, private behind a link. The deploy
-workflow stages a Gradio Space that runs `deploy/app.py`, which serves the same
+The live demo runs in a GitHub Codespace: start the server as in
+[Run it](#run-it) and make port 7860 public. For a permanent host, the deploy
+workflow targets a Hugging Face Space, private behind a link. It stages a Gradio Space that runs `deploy/app.py`, which serves the same
 FastAPI app the Dockerfile runs. CPU Spaces need an HF PRO plan (the free tier
 only offers ZeroGPU, which this app doesn't use).
 
