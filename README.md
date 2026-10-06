@@ -129,12 +129,13 @@ Upload a PDF (or use the mortgage corpus) and ask questions about it.
 
 > **It may not work when you try it.** This is a zero-budget project: I can't
 > pay for an LLM API key or a host, so the demo runs entirely on free tiers.
-> The answers come from Gemini's free tier, which allows about 20 questions
-> a day and often returns "high demand" errors. The app runs in a GitHub
-> Codespace, which goes to sleep when idle and has limited free hours. If you
-> get an error or the page doesn't load, the quota is used up or the
-> Codespace is asleep. [Run it locally](#run-it) with your own key and it
-> works the same way.
+> Answers come from Gemini's free tier, which allows about 20 questions a day
+> and often returns "high demand" errors. When Gemini fails, the app falls
+> back to a small local model (Qwen3 1.7B on the Codespace's CPU). That answer
+> is slower and weaker, but you still get one. The app runs in a GitHub
+> Codespace, which goes to sleep when idle and has limited free hours. If the
+> page doesn't load, the Codespace is asleep. [Run it locally](#run-it) with
+> your own key for the full experience.
 
 ## Run it
 
