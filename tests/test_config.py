@@ -18,7 +18,7 @@ def test_retrieval_defaults_tuned_past_notebook_for_recall():
     """top_k/rerank_top_n/dedup_threshold/max_context_tokens were widened past
     the notebook's originals (10/5/0.92/2000) after eval showed the notebook's
     values capped +rerank recall at ~51% on the eval corpus; the wider window
-    reaches ~71%. See docs/superpowers/plans/2026-09-28-docuchat-evaluation.md."""
+    reaches ~71%."""
     cfg = Settings()
     assert cfg.top_k == 30
     assert cfg.rerank_top_n == 15
