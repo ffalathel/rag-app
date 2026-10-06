@@ -147,6 +147,13 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
+On a bare Linux machine (a server, a Codespace, a slim Docker image), Docling's
+OCR also needs a few system libraries:
+
+```bash
+sudo apt-get install -y libgl1 libglib2.0-0 libxcb1
+```
+
 Put one LLM key in a `.env` at the repo root (it's gitignored):
 
 ```bash
@@ -163,6 +170,15 @@ Start the server. The UI is at http://localhost:7860 and the API is under
 
 ```bash
 uvicorn docuchat.api:app --env-file .env --port 7860
+```
+
+No GPU? The default reranker takes about two minutes per question on a
+4-core CPU. Set these before starting the server to use the small one the demo
+uses:
+
+```bash
+export DOCUCHAT_CROSS_ENCODER_NAME=cross-encoder/ms-marco-MiniLM-L-6-v2
+export DOCUCHAT_CROSS_ENCODER_MAX_LENGTH=512
 ```
 
 With no key, the app still starts and uploads still index, but questions come
